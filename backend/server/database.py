@@ -1,28 +1,31 @@
+import os
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker , declarative_base
+from sqlalchemy.orm import sessionmaker, declarative_base
 
+load_dotenv()
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./roamlocal.db"
+# Read the cloud database URL from environment (.env locally or Render in cloud)
+# Fallback to local SQLite if DATABASE_URL is not set
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./roamlocal.db")
 
+# Render/Supabase sometimes provide "postgres://", but SQLAlchemy 2.0 requires "postgresql://"
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+# SQLite requires 'check_same_thread', PostgreSQL does not support it
+if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(SQLALCHEMY_DATABASE_URL)
 
-#Here roam DB is a home and main.py is the main factpry and now you need to engine to share the data that is we are creating 
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-engine  = create_engine(SQLALCHEMY_DATABASE_URL , connect_args = {"check_same_thread" : False})
-
-
-SessionLocal = sessionmaker(autocommit = False , autoflush = False , bind =  engine)
-
-
-Base =  declarative_base()
+Base = declarative_base()
 
 def get_db():
-
     db = SessionLocal()
-
-    try : 
-        yield db # Here yeild is like telling database that do your job , I am waiting over  here
-    finally :
+    try:
+        yield db
+    finally:
         db.close()
-
-

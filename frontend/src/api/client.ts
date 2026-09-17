@@ -3,7 +3,7 @@ import { MOCK_GROUPS } from '../mock/groups';
 import type { Place, Group, GroupRequest, Submission, Review, AppNotification } from '../types';
 
 
-const BASE_URL = "http://127.0.0.1:8000/"
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/";
 
 export const placesApi = {
   getPlaces: async (filters?: { category?: string; maxPrice?: number }): Promise<Place[]> => {
@@ -401,6 +401,30 @@ export const notificationsApi = {
       return response.ok;
     } catch (error) {
       console.error("Failed to mark all notifications as read:", error);
+      return false;
+    }
+  },
+
+  clearAll: async (userEmail: string, isAdmin: boolean = false): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BASE_URL}api/notifications/clear-all?user_email=${encodeURIComponent(userEmail)}&is_admin=${isAdmin}`, {
+        method: 'DELETE'
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to clear notifications:", error);
+      return false;
+    }
+  },
+
+  deleteNotification: async (notificationId: number): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BASE_URL}api/notifications/${notificationId}`, {
+        method: 'DELETE'
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to delete notification:", error);
       return false;
     }
   }

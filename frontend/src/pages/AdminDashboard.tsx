@@ -20,7 +20,6 @@ import {
   Filter,
   ShieldCheck,
   Check,
-  RefreshCw,
   Eye,
   SlidersHorizontal
 } from 'lucide-react';

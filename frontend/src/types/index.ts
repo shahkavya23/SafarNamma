@@ -13,6 +13,8 @@ export interface Place {
   longitude?: number;
   map_link?: string ;
   is_approved?: boolean;
+  submitted_by_email?: string | null;
+  submission_status?: string | null;
   
   // (We'll keep a few of the old ones optional so React doesn't complain elsewhere for now)
   distance_km?: number;

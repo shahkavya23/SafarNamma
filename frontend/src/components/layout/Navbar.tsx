@@ -36,7 +36,6 @@ export const Navbar = () => {
   
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
-  const clearedNotificationIds = useRef<Set<number>>(new Set());
   
   const notificationsRef = useRef<HTMLDivElement>(null);
 
@@ -50,9 +49,7 @@ export const Navbar = () => {
     if (!isAuthenticated || !user?.email) return;
     try {
       const data = await notificationsApi.getNotifications(user.email, isAdmin);
-      const visibleNotifications = (data.notifications || []).filter(
-        notification => !clearedNotificationIds.current.has(notification.id)
-      );
+      const visibleNotifications = data.notifications || [];
       setNotifications(visibleNotifications);
       setUnreadCount(visibleNotifications.filter(notification => !notification.is_read).length);
     } catch (err) {
@@ -90,7 +87,7 @@ export const Navbar = () => {
       if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
       const diffInHours = Math.floor(diffInMinutes / 60);
       if (diffInHours < 24) return `${diffInHours}h ago`;
-      const diffInDays = Math.floor(diffInDays / 24);
+      const diffInDays = Math.floor(diffInHours / 24);
       if (diffInDays === 1) return 'Yesterday';
       return `${diffInDays}d ago`;
     } catch {
@@ -180,10 +177,23 @@ export const Navbar = () => {
     await notificationsApi.markAllAsRead(user.email, isAdmin);
   };
 
-  const handleClearAll = () => {
-    notifications.forEach(notification => clearedNotificationIds.current.add(notification.id));
+  // Handle clearing all notifications from database
+  const handleClearAll = async () => {
+    if (!user?.email) return;
     setNotifications([]);
     setUnreadCount(0);
+    await notificationsApi.clearAll(user.email, isAdmin);
+  };
+
+  // Handle deleting a single notification from database
+  const handleDeleteNotification = async (e: React.MouseEvent, notifId: number) => {
+    e.stopPropagation();
+    const target = notifications.find(n => n.id === notifId);
+    setNotifications(prev => prev.filter(n => n.id !== notifId));
+    if (target && !target.is_read) {
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    }
+    await notificationsApi.deleteNotification(notifId);
   };
 
   return (
@@ -337,9 +347,18 @@ export const Navbar = () => {
                                       <span className="text-[11px] text-gray-400">
                                         {formatTimeAgo(notif.created_at)}
                                       </span>
-                                      <span className="text-[11px] text-[#1a4731] font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-                                        View <ChevronRight className="w-3 h-3" />
-                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          onClick={(e) => handleDeleteNotification(e, notif.id)}
+                                          title="Dismiss notification"
+                                          className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-400 hover:text-rose-600 transition-all rounded hover:bg-rose-50"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                        <span className="text-[11px] text-[#1a4731] font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                                          View <ChevronRight className="w-3 h-3" />
+                                        </span>
+                                      </div>
                                     </div>
                                   </div>
 
@@ -527,7 +546,16 @@ export const Navbar = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-gray-900 truncate">{notif.title}</span>
-                        <span className="text-[10px] text-gray-400">{formatTimeAgo(notif.created_at)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-gray-400">{formatTimeAgo(notif.created_at)}</span>
+                          <button
+                            onClick={(e) => handleDeleteNotification(e, notif.id)}
+                            title="Dismiss notification"
+                            className="p-1 text-gray-400 hover:text-rose-600 rounded"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{notif.message}</p>
                     </div>

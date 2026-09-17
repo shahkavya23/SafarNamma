@@ -26,7 +26,7 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins = origins,
-    allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex =r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$",
     allow_credentials = True,
     allow_methods = ["*"],
     allow_headers = ["*"]
@@ -811,3 +811,29 @@ def mark_all_notifications_read(user_email: str, is_admin: bool = False, db: Ses
     query.update({models.Notification.is_read: True}, synchronize_session=False)
     db.commit()
     return {"status": "success"}
+
+
+@app.delete("/api/notifications/clear-all")
+def clear_all_notifications(user_email: str, is_admin: bool = False, db: Session = Depends(get_db)):
+    """Deletes/clears all notifications for a user or admin from the database."""
+    if is_admin:
+        query = db.query(models.Notification).filter(
+            (models.Notification.user_email.ilike(user_email)) | (models.Notification.user_email == "admin")
+        )
+    else:
+        query = db.query(models.Notification).filter(models.Notification.user_email.ilike(user_email))
+    
+    query.delete(synchronize_session=False)
+    db.commit()
+    return {"status": "success", "message": "All notifications cleared from database"}
+
+
+@app.delete("/api/notifications/{notification_id}")
+def delete_notification(notification_id: int, db: Session = Depends(get_db)):
+    """Deletes a single notification from the database."""
+    notif = db.query(models.Notification).filter(models.Notification.id == notification_id).first()
+    if notif:
+        db.delete(notif)
+        db.commit()
+    return {"status": "success"}
+
