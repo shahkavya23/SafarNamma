@@ -9,6 +9,7 @@ from sqlalchemy import func
 from server.database import engine, Base, get_db
 from SQLite import models
 from Submissions import schemas 
+from server.cloudinary_utils import delete_destination_cloudinary_assets
 
 
 
@@ -214,6 +215,9 @@ def delete_destination(destination_id : int , db : Session = Depends(get_db)):
 
     if not dest:
         raise HTTPException(status_code = 404 , detail = "Destination not found")
+
+    # Clean up Cloudinary images (cover image + gallery images)
+    delete_destination_cloudinary_assets(dest)
 
     db.delete(dest)
 
@@ -723,7 +727,10 @@ def reject_submission(destination_id: int, db: Session = Depends(get_db)):
         )
         db.add(notif)
 
-    # 2. Delete destination from table
+    # 2. Delete destination images from Cloudinary
+    delete_destination_cloudinary_assets(dest)
+
+    # 3. Delete destination from table
     db.delete(dest)
     db.commit()
     return {"message": "Submission rejected and removed.", "id": destination_id}
