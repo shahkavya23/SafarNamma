@@ -39,6 +39,11 @@ Base.metadata.create_all(bind = engine)
 async def root():
     return {"message" : "RoamLoacal API is running"}
 
+@app.get('/api/health')
+@app.get('/health')
+async def health_check():
+    return {"status": "ok", "message": "RoamLocal API is healthy"}
+
 
 
 
