@@ -50,7 +50,7 @@ export const AdminDashboard = () => {
   // Modal State for Curating Mandatory Metadata Before Approval
   const [selectedForApproval, setSelectedForApproval] = useState<Place | null>(null);
   const [curationForm, setCurationForm] = useState({
-    category: 'Park',
+    category: 'Nature',
     duration: '2-3 Hours',
     best_season: 'October - March (Winter)',
     description: '',
@@ -101,7 +101,7 @@ export const AdminDashboard = () => {
   const openApprovalModal = (place: Place) => {
     setSelectedForApproval(place);
     setCurationForm({
-      category: place.category || 'Park',
+      category: place.category || 'Nature',
       duration: place.duration || '2-3 Hours',
       best_season: place.best_season || 'October - March (Winter)',
       description: place.description || '',

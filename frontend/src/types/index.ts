@@ -1,17 +1,14 @@
 export const PLACE_CATEGORIES = [
-  'Park',
-  'Game Zone',
-  'Monuments',
-  'Museums',
-  'Adventure',
-  'Cafe',
+  'Religious Places',
   'Mall',
   'Entertainment',
-  'Shopping',
-  'Famous Streets',
-  'Religious Places',
-  'Lakes',
-  'Treks',
+  'Monuments',
+  'Museums',
+  'Cafes & Restaurants',
+  'Nature',
+  'Games & Adventure',
+  'Street Shopping',
+  'Food Places',
 ] as const;
 
 export type PlaceCategory = (typeof PLACE_CATEGORIES)[number];

@@ -78,11 +78,11 @@ const SEED_PLACES = [
 
 /* ─── Category quick filters ─── */
 const CATEGORIES = [
-  { label: 'Treks', icon: Mountain, value: 'Treks' },
-  { label: 'Cafe', icon: Coffee, value: 'Cafe' },
-  { label: 'Lakes', icon: Droplets, value: 'Lakes' },
-  { label: 'Adventure', icon: Tent, value: 'Adventure' },
+  { label: 'Games & Adventure', icon: Tent, value: 'Games & Adventure' },
+  { label: 'Cafes & Restaurants', icon: Coffee, value: 'Cafes & Restaurants' },
+  { label: 'Nature', icon: Droplets, value: 'Nature' },
   { label: 'Monuments', icon: Eye, value: 'Monuments' },
+  { label: 'Religious Places', icon: Mountain, value: 'Religious Places' },
 ];
 
 /* ─── Count-up hook ─── */
