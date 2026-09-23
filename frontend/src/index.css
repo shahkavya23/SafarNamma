@@ -544,3 +544,25 @@
     box-shadow: 0 0 8px rgba(16,185,129,0.6);
   }
 }
+
+/* ── Reduced motion: show content immediately, no lifts or zooms ── */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .place-card:hover,
+  .group-card:hover,
+  .place-card:hover .place-card-img {
+    transform: none;
+  }
+
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-scale-in {
+    animation: none;
+    opacity: 1;
+  }
+}

@@ -13,6 +13,7 @@ from server.cloudinary_utils import delete_destination_cloudinary_assets
 
 
 
+# Active DB: Cloud Supabase PostgreSQL (AWS Mumbai)
 app = FastAPI()
 
 
@@ -43,6 +44,35 @@ async def root():
 @app.get('/health')
 async def health_check():
     return {"status": "ok", "message": "RoamLocal API is healthy"}
+
+
+# ── Live presence ──
+# Each open tab pings every ~45s with a random session id. Anyone seen within
+# PRESENCE_WINDOW counts as "online". Kept in memory: resets on restart and is
+# per-process, which is fine for a single-instance deploy.
+PRESENCE_WINDOW = timedelta(minutes=2)
+PRESENCE_BASELINE = 20  # always added to the real count shown on the homepage
+_presence_last_seen: dict[str, datetime] = {}
+
+
+def _live_count() -> int:
+    cutoff = datetime.utcnow() - PRESENCE_WINDOW
+    for sid in [sid for sid, seen in _presence_last_seen.items() if seen < cutoff]:
+        del _presence_last_seen[sid]
+    return len(_presence_last_seen)
+
+
+@app.post('/api/presence')
+async def presence_ping(payload: schemas.PresencePing):
+    _presence_last_seen[payload.session_id] = datetime.utcnow()
+    active = _live_count()
+    return {"active": active, "display": active + PRESENCE_BASELINE}
+
+
+@app.get('/api/presence')
+async def presence_count():
+    active = _live_count()
+    return {"active": active, "display": active + PRESENCE_BASELINE}
 
 
 

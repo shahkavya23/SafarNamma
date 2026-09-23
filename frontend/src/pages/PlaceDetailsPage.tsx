@@ -1,10 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { MapPin, Clock, IndianRupee, CheckCircle, Navigation, Bookmark, ExternalLink, AlertTriangle, Calendar, Users, Star, MessageSquare, ChevronLeft, ChevronRight, Camera } from 'lucide-react';
-import type { Place , Review} from '../types';
-import { placesApi , reviewApi } from '../api/client';
+import {
+  MapPin,
+  CheckCircle,
+  Navigation,
+  Bookmark,
+  ExternalLink,
+  AlertTriangle,
+  Star,
+  MessageSquare,
+  Sparkles,
+  ArrowRight,
+  Pencil,
+  Trash2,
+  Leaf,
+} from 'lucide-react';
+import type { Place, Review } from '../types';
+import { placesApi, reviewApi } from '../api/client';
 import { useFavorites } from '../context/FavoritesContext';
 import { useAuth } from '../context/AuthContext';
+import { useScrollReveal } from '../hooks/useScrollReveal';
+import { PLACE_FALLBACK_IMAGE } from '../components/places/PlaceCard';
+import { StickyPhotoStage, MobilePhotoCarousel, PhotoLightbox } from '../components/places/PlaceGallery';
+import { BoardingPass } from '../components/places/BoardingPass';
 
 
 const formatTime = (timeStr?: string) => {
@@ -31,13 +49,36 @@ const formatVisitingHours = (open?: string, close?: string) => {
   return `Closes at ${formatTime(close)}`;
 };
 
+/* ─── Section wrapper with scroll-reveal ─── */
+const RevealSection: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => {
+  const { ref, visible } = useScrollReveal<HTMLElement>();
+  return (
+    <section ref={ref} className={`reveal ${visible ? 'visible' : ''} ${className}`}>
+      {children}
+    </section>
+  );
+};
+
+const StarRow: React.FC<{ rating: number; size?: string }> = ({ rating, size = 'w-4 h-4' }) => (
+  <div className="flex items-center gap-0.5">
+    {[1, 2, 3, 4, 5].map((star) => (
+      <Star
+        key={star}
+        className={`${size} ${star <= Math.round(rating) ? 'text-[#F59E0B] fill-[#F59E0B]' : 'text-[#334155] fill-[#334155]'}`}
+      />
+    ))}
+  </div>
+);
+
 export const PlaceDetailsPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const [place, setPlace] = useState<Place | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
-  
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const storyRef = useRef<HTMLDivElement>(null);
+
   // Layer 4A: Reviews & Ratings state
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
@@ -49,7 +90,7 @@ export const PlaceDetailsPage = () => {
   const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewSuccess, setReviewSuccess] = useState<string | null>(null);
-  
+
   // Use our new global favorites context
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
   const { isAdmin } = useAuth();
@@ -108,7 +149,7 @@ export const PlaceDetailsPage = () => {
 
   const handleDelete = async () => {
     if (!place) return;
-    
+
     // Show a browser confirmation popup before deleting!
     if (window.confirm("Are you sure you want to delete this destination?")) {
       const success = await placesApi.deletePlace(place.id);
@@ -157,36 +198,52 @@ export const PlaceDetailsPage = () => {
       });
     }
     if (list.length === 0) {
-      list.push('https://images.unsplash.com/photo-1506461883276-594543d04e12');
+      list.push(PLACE_FALLBACK_IMAGE);
     }
     return list;
   }, [place]);
 
-  const currentPhoto = allPhotos[selectedImageIndex] || allPhotos[0] || 'https://images.unsplash.com/photo-1506461883276-594543d04e12';
-
-  const handlePrevPhoto = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedImageIndex((prev) => (prev === 0 ? allPhotos.length - 1 : prev - 1));
-  };
-
-  const handleNextPhoto = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedImageIndex((prev) => (prev === allPhotos.length - 1 ? 0 : prev + 1));
-  };
+  // Desktop: the sticky photo follows your scroll through the story column
+  useEffect(() => {
+    if (allPhotos.length < 2) return;
+    let frame = 0;
+    let lastIndex = -1;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const el = storyRef.current;
+        if (!el || window.innerWidth < 1024) return;
+        const rect = el.getBoundingClientRect();
+        const scrollable = rect.height - window.innerHeight;
+        const progress = scrollable > 0 ? Math.min(1, Math.max(0, -rect.top / scrollable)) : 0;
+        const next = Math.min(allPhotos.length - 1, Math.floor(progress * allPhotos.length));
+        if (next !== lastIndex) {
+          lastIndex = next;
+          setSelectedImageIndex(next);
+        }
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, [allPhotos.length]);
 
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full animate-pulse">
-        <div className="h-96 bg-gray-200 rounded-2xl mb-8 w-full"></div>
-        <div className="h-10 bg-gray-200 rounded w-1/3 mb-4"></div>
-        <div className="h-6 bg-gray-200 rounded w-1/4 mb-12"></div>
-        <div className="grid md:grid-cols-3 gap-8">
-          <div className="md:col-span-2 space-y-4">
-            <div className="h-4 bg-gray-200 rounded w-full"></div>
-            <div className="h-4 bg-gray-200 rounded w-full"></div>
-            <div className="h-4 bg-gray-200 rounded w-4/5"></div>
+      <div className="w-full bg-[#0C0E10] min-h-screen pt-28 pb-16">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14">
+          <div className="lg:col-span-6 skeleton aspect-[4/3] lg:aspect-auto lg:h-[calc(100vh-9rem)] rounded-[24px]" />
+          <div className="lg:col-span-6 space-y-5">
+            <div className="skeleton h-3 w-40" />
+            <div className="skeleton h-12 w-4/5" />
+            <div className="skeleton h-3 w-2/3" />
+            <div className="skeleton h-56 w-full rounded-[20px] mt-8" />
+            <div className="skeleton h-4 w-full" />
+            <div className="skeleton h-4 w-full" />
+            <div className="skeleton h-4 w-3/4" />
           </div>
-          <div className="h-64 bg-gray-200 rounded-xl"></div>
         </div>
       </div>
     );
@@ -194,424 +251,349 @@ export const PlaceDetailsPage = () => {
 
   if (!place) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">Place Not Found</h1>
-        <p className="text-gray-500 mb-8">We couldn't find the destination you're looking for.</p>
-        <Link to="/explore" className="bg-[#0D5C63] text-white px-6 py-3 rounded-full font-medium hover:bg-[#0A3F47] transition-colors">
-          Back to Explore
+      <div className="w-full bg-[#0C0E10] min-h-screen flex flex-col items-center justify-center text-center px-6 pt-20">
+        <div className="section-label justify-center">404 · Off the map</div>
+        <h1 className="text-display text-white mt-4 mb-4" style={{ fontSize: 'clamp(36px, 6vw, 64px)' }}>
+          Place Not Found
+        </h1>
+        <p className="text-[#64748B] mb-10 max-w-md">
+          We couldn't find the destination you're looking for. It may have been removed or renamed.
+        </p>
+        <Link to="/explore" className="btn-primary">
+          Back to Explore <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
     );
   }
 
+  const metaItems = [
+    place.state || 'Karnataka',
+    place.duration || null,
+  ].filter(Boolean) as string[];
+
+  const passFields = [
+    { label: 'Distance', value: place.distance_km != null ? `${place.distance_km} KM` : 'In city' },
+    { label: 'Time', value: place.duration || 'Flexible' },
+    { label: 'Budget', value: place.budget_tier && place.budget_tier !== '0' ? `~₹${place.budget_tier}` : 'Free' },
+    { label: 'Season', value: place.best_season || 'All year' },
+  ];
+
+  const passFooter = [
+    { label: 'Open', value: formatVisitingHours(place.opening_hours, place.closing_hours) },
+    { label: 'Category', value: place.category },
+  ];
+
+  const nearby = place.nearby_facilities
+    ? place.nearby_facilities.split(',').map((f) => f.trim()).filter(Boolean)
+    : ['Basic eateries', 'Restrooms'];
+
+  const knowBefore = [
+    { icon: Navigation, label: 'Getting there', content: place.transport_options || 'Local cabs and buses available' },
+    { icon: MapPin, label: 'Nearby', content: nearby.join(' · ') },
+    { icon: AlertTriangle, label: 'Stay safe', content: 'Check the weather before you leave and follow local guidelines.' },
+    { icon: Leaf, label: 'Leave no trace', content: 'Respect the local environment. Carry your waste back with you.' },
+  ];
+
+  const galleryProps = {
+    photos: allPhotos,
+    index: selectedImageIndex,
+    onIndexChange: setSelectedImageIndex,
+    onOpen: () => setIsLightboxOpen(true),
+    name: place.name,
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-      {/* Breadcrumbs */}
-      <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-        <Link to="/explore" className="hover:text-[#F59E0B]">Explore</Link>
-        <span>/</span>
-        <span className="text-gray-900 font-medium">{place.name}</span>
-      </div>
+    <div className="w-full bg-[#0C0E10] text-white min-h-screen pt-28 pb-24">
+      <div className="max-w-7xl mx-auto px-6 sm:px-10 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14">
+        {/* ── Photos: sticky stage on desktop, swipe carousel on mobile ── */}
+        <div className="lg:col-span-6">
+          <div className="hidden lg:block sticky top-28 h-[calc(100vh-9rem)] animate-fade-in">
+            <StickyPhotoStage {...galleryProps} />
+          </div>
+          <div className="lg:hidden animate-fade-in">
+            <MobilePhotoCarousel {...galleryProps} />
+          </div>
+        </div>
 
-      {/* Hero Image & Gallery Showcase */}
-      <div className="relative h-72 md:h-[420px] w-full rounded-3xl overflow-hidden mb-4 shadow-md group">
-        <img 
-          key={currentPhoto}
-          src={currentPhoto} 
-          alt={place.name} 
-          referrerPolicy="no-referrer"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1506461883276-594543d04e12';
-          }}
-          className="w-full h-full object-cover transition-all duration-500 transform group-hover:scale-[1.01]"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent pointer-events-none"></div>
-
-        {/* Multi-photo Navigation Controls */}
-        {allPhotos.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={handlePrevPhoto}
-              className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md flex items-center justify-center transition-all z-20 shadow-lg"
-              title="Previous photo"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-            <button
-              type="button"
-              onClick={handleNextPhoto}
-              className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md flex items-center justify-center transition-all z-20 shadow-lg"
-              title="Next photo"
-            >
-              <ChevronRight className="w-6 h-6" />
-            </button>
-
-            {/* Photo Counter Pill */}
-            <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 z-20 shadow-sm">
-              <Camera className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{selectedImageIndex + 1} / {allPhotos.length}</span>
-            </div>
-          </>
-        )}
-
-        <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end z-10 pointer-events-auto">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="bg-[#F59E0B] text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">
+        {/* ── Story column ── */}
+        <div ref={storyRef} className="lg:col-span-6 min-w-0 space-y-16">
+          {/* Title block */}
+          <header>
+            <nav className="text-label text-[#64748B] mb-6 animate-fade-up delay-0">
+              <Link to="/explore" className="hover:text-[#F59E0B] transition-colors">Explore</Link>
+              <span className="mx-2 text-[#334155]">/</span>
+              <Link
+                to={`/explore?category=${encodeURIComponent(place.category)}`}
+                className="text-[#CBD5E1] hover:text-[#F59E0B] transition-colors"
+              >
                 {place.category}
-              </span>
-              {place.is_hidden_gem && (
-                <span className="bg-white/20 backdrop-blur-md text-white border border-white/40 px-2.5 py-1 rounded-full text-xs font-medium flex items-center gap-1 shadow-sm">
-                  <CheckCircle className="w-3 h-3 text-yellow-400" /> Hidden Gem
+              </Link>
+            </nav>
+
+            {place.is_hidden_gem && (
+              <div className="mb-4 animate-fade-up delay-60">
+                <span className="badge badge-amber">
+                  <Sparkles className="w-2.5 h-2.5" /> Hidden Gem
                 </span>
+              </div>
+            )}
+
+            <h1
+              className="text-display text-white mb-5 animate-fade-up delay-120"
+              style={{ fontSize: 'clamp(36px, 4.5vw, 60px)' }}
+            >
+              {place.name}
+            </h1>
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-label text-[#CBD5E1] animate-fade-up delay-180">
+              <MapPin className="w-3.5 h-3.5 text-[#F59E0B]" />
+              {metaItems.map((item, i) => (
+                <React.Fragment key={item}>
+                  {i > 0 && <span className="w-px h-3 bg-[#334155]" />}
+                  <span>{item}</span>
+                </React.Fragment>
+              ))}
+              {place.rating > 0 && (
+                <>
+                  <span className="w-px h-3 bg-[#334155]" />
+                  <span className="flex items-center gap-1 text-[#F59E0B]">
+                    <Star className="w-3.5 h-3.5 fill-[#F59E0B]" /> {place.rating.toFixed(1)}
+                  </span>
+                </>
               )}
             </div>
-            <h1 className="text-3xl md:text-5xl font-serif font-bold text-white mb-2 drop-shadow-sm">{place.name}</h1>
-            <p className="text-white/90 flex items-center gap-2 text-sm md:text-base">
-              <MapPin className="w-4 h-4 text-[#F59E0B]" /> {place.state || 'India'}
-            </p>
-          </div>
-          <div className="hidden sm:flex gap-3">
-            <button 
-              onClick={handleSaveToggle}
-              className={`backdrop-blur-md p-3 rounded-full border transition-colors ${isSaved ? 'bg-white text-[#F59E0B] border-white shadow-md' : 'bg-white/20 hover:bg-white/30 text-white border-white/40'}`}
-              title={isSaved ? "Remove from favorites" : "Save to favorites"}
-            >
-              <Bookmark className="w-5 h-5" fill={isSaved ? "currentColor" : "none"} />
-            </button>
-            {place.map_link && (
-              <a href = {place.map_link}  target = "_blank" rel = "noopener noreferrer" className="bg-white text-[#0D5C63] px-6 py-3 rounded-full font-bold hover:bg-gray-100 transition-colors flex items-center gap-2 shadow-lg">
-                <Navigation className="w-4 h-4" /> Get Directions
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
 
-      {/* Interactive Thumbnail Gallery Rail (When multiple photos exist) */}
-      {allPhotos.length > 1 && (
-        <div className="flex items-center gap-3 overflow-x-auto pb-2 mb-8 scrollbar-none">
-          {allPhotos.map((photoUrl, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => setSelectedImageIndex(idx)}
-              className={`relative shrink-0 w-24 h-16 md:w-28 md:h-18 rounded-2xl overflow-hidden border-2 transition-all duration-200 shadow-sm ${
-                selectedImageIndex === idx
-                  ? 'border-[#F59E0B] ring-2 ring-[#F59E0B]/30 scale-105 shadow-md'
-                  : 'border-transparent opacity-70 hover:opacity-100 hover:border-gray-300'
-              }`}
-            >
-              <img
-                src={photoUrl}
-                alt={`${place.name} thumbnail ${idx + 1}`}
-                className="w-full h-full object-cover"
-              />
-              {selectedImageIndex === idx && (
-                <div className="absolute inset-0 bg-[#F59E0B]/10" />
+            <div className="flex flex-wrap gap-2 mt-7 animate-fade-up delay-240">
+              <button
+                onClick={handleSaveToggle}
+                className="btn-ghost py-2.5"
+                style={isSaved ? { color: '#F59E0B', borderColor: 'rgba(245,158,11,0.40)' } : undefined}
+                aria-pressed={isSaved}
+              >
+                <Bookmark className="w-4 h-4" fill={isSaved ? 'currentColor' : 'none'} />
+                {isSaved ? 'Saved' : 'Save'}
+              </button>
+              {place.map_link && (
+                <a href={place.map_link} target="_blank" rel="noopener noreferrer" className="btn-ghost py-2.5">
+                  <Navigation className="w-4 h-4" /> Directions
+                </a>
               )}
-            </button>
-          ))}
-        </div>
-      )}
+            </div>
+          </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-10">
-          <section>
-            <h2 className="text-2xl font-serif font-bold text-[#0D5C63] mb-4">About this place</h2>
-            <p className="text-gray-700 leading-relaxed whitespace-pre-line text-lg">
+          {/* Boarding pass */}
+          <RevealSection>
+            <BoardingPass
+              placeId={place.id}
+              placeName={place.name}
+              fields={passFields}
+              footerFields={passFooter}
+              onFindConvoy={() => navigate(`/groups?destinationId=${place.id}`)}
+            />
+          </RevealSection>
+
+          {/* About */}
+          <RevealSection>
+            <div className="section-label">The Story</div>
+            <p className="text-[#CBD5E1] text-lg leading-relaxed whitespace-pre-line max-w-[62ch] mt-5">
               {place.description}
             </p>
-          </section>
+          </RevealSection>
 
-          {/* Quick Facts Grid */}
-          <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-[#FAF9F6] p-4 rounded-2xl border border-gray-100">
-              <Clock className="w-6 h-6 text-[#0D5C63] mb-2" />
-              <p className="text-xs text-gray-500 uppercase font-semibold tracking-wider">Duration</p>
-              <p className="font-medium text-gray-900">{place.duration}</p>
-            </div>
-            <div className="bg-[#FAF9F6] p-4 rounded-2xl border border-gray-100">
-              <IndianRupee className="w-6 h-6 text-[#0D5C63] mb-2" />
-              <p className="text-xs text-gray-500 uppercase font-semibold tracking-wider">Budget Tier</p>
-              <p className="font-medium text-gray-900">{place.budget_tier ? `₹${place.budget_tier}` : 'Free'}</p>
-            </div>
-            <div className="bg-[#FAF9F6] p-4 rounded-2xl border border-gray-100">
-              <Calendar className="w-6 h-6 text-[#0D5C63] mb-2" />
-              <p className="text-xs text-gray-500 uppercase font-semibold tracking-wider">Best Season</p>
-              <p className="font-medium text-gray-900">{place.best_season || 'All Year'}</p>
-            </div>
-          </section>
+          {/* Know before you go */}
+          <RevealSection>
+            <div className="section-label">Know Before You Go</div>
+            <dl className="mt-5 divide-y divide-[rgba(255,255,255,0.06)] border-y border-[rgba(255,255,255,0.06)]">
+              {knowBefore.map(({ icon: Icon, label, content }) => (
+                <div key={label} className="grid grid-cols-1 sm:grid-cols-[11rem_1fr] gap-x-4 gap-y-1.5 py-4">
+                  <dt className="flex items-center gap-2 text-label text-[#64748B]">
+                    <Icon className="w-3.5 h-3.5 text-[#F59E0B]" /> {label}
+                  </dt>
+                  <dd className="text-sm text-[#CBD5E1] leading-relaxed">{content}</dd>
+                </div>
+              ))}
+            </dl>
+          </RevealSection>
 
-          <section className="bg-red-50 p-6 rounded-2xl border border-red-100">
-            <h3 className="text-lg font-bold text-red-900 mb-4 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" /> Important Safety Information
-            </h3>
-            <p className="text-red-800 mb-4">Please exercise caution and follow all local guidelines. Check weather conditions before traveling.</p>
-            <div className="bg-white/60 p-4 rounded-xl border border-red-100">
-              <h4 className="font-semibold text-gray-900 mb-2">Rules & Regulations</h4>
-              <p className="text-gray-700 text-sm">Respect the local environment and leave no trace.</p>
-            </div>
-          </section>
-
-          {/* Community Reviews & Ratings Section */}
-          <section className="border-t border-gray-100 pt-8 mt-10">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-2xl font-serif font-bold text-[#0D5C63] flex items-center gap-2">
-                  <Star className="w-6 h-6 text-amber-500 fill-amber-500" />
-                  Community Reviews
-                </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  {reviews.length === 0
-                    ? 'No reviews yet for this destination.'
-                    : `${reviews.length} ${reviews.length === 1 ? 'traveler review' : 'traveler reviews'} with an average rating of ${place.rating || 0}★`}
-                </p>
-              </div>
+          {/* Community reviews */}
+          <RevealSection>
+            <div className="section-label">Community Reviews</div>
+            <div className="flex flex-wrap items-end justify-between gap-4 mt-4 mb-8">
+              <h2 className="text-display text-white" style={{ fontSize: 'clamp(28px, 3.5vw, 40px)' }}>
+                What Explorers Say
+              </h2>
+              {reviews.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <StarRow rating={place.rating || 0} />
+                  <span className="text-label text-[#64748B]">
+                    {(place.rating || 0).toFixed(1)} · {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Write a Review Form Box */}
-            <div className="bg-[#FAF9F6] p-6 rounded-2xl border border-gray-100 mb-8">
-              <h4 className="font-bold text-gray-900 mb-1">Leave a Review</h4>
-              <p className="text-xs text-gray-500 mb-4">
-                Share your tips, experiences, or recommendations for fellow travelers.
+            {/* Write a review */}
+            <div className="glass rounded-[20px] p-6 mb-8">
+              <h4 className="text-heading text-white text-base mb-1">Leave a review</h4>
+              <p className="text-sm text-[#64748B] mb-5">
+                Share tips on timing, parking, or the best viewpoints for fellow explorers.
               </p>
 
               {reviewSuccess && (
-                <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <div className="mb-4 p-3 rounded-xl text-sm flex items-center gap-2 bg-[#10B981]/10 border border-[#10B981]/25 text-[#34D399]">
+                  <CheckCircle className="w-4 h-4 shrink-0" />
                   <span>{reviewSuccess}</span>
                 </div>
               )}
 
               {reviewError && (
-                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-sm flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <div className="mb-4 p-3 rounded-xl text-sm flex items-center gap-2 bg-[#EF4444]/10 border border-[#EF4444]/25 text-[#F87171]">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span>{reviewError}</span>
                 </div>
               )}
 
-              <form onSubmit={handleReviewSubmit} className="space-y-4">
-                {/* Star Picker */}
+              <form onSubmit={handleReviewSubmit} className="space-y-5">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                    Your Rating
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1">
+                  <label className="text-label text-[#64748B] block mb-2">Your rating</label>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1" onMouseLeave={() => setHoverRating(0)}>
                       {[1, 2, 3, 4, 5].map((star) => (
                         <button
                           key={star}
                           type="button"
                           onClick={() => setNewRating(star)}
                           onMouseEnter={() => setHoverRating(star)}
-                          onMouseLeave={() => setHoverRating(0)}
-                          className="p-1 -m-1 focus:outline-none transition-transform hover:scale-110"
+                          className="p-1 -m-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F59E0B] rounded"
+                          aria-label={`${star} star${star > 1 ? 's' : ''}`}
                         >
                           <Star
                             className={`w-6 h-6 transition-colors ${
                               star <= (hoverRating || newRating)
-                                ? 'text-amber-400 fill-amber-400'
-                                : 'text-gray-300'
+                                ? 'text-[#F59E0B] fill-[#F59E0B]'
+                                : 'text-[#334155] fill-[#334155]'
                             }`}
                           />
                         </button>
                       ))}
                     </div>
-                    <span className="text-sm font-bold text-gray-700 ml-2">
-                      {hoverRating || newRating} / 5
-                    </span>
+                    <span className="font-mono text-sm text-[#CBD5E1]">{hoverRating || newRating} / 5</span>
                   </div>
                 </div>
 
-                {/* Comment Field */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                    Your Experience
-                  </label>
+                  <label htmlFor="review-comment" className="text-label text-[#64748B] block mb-2">Your experience</label>
                   <textarea
+                    id="review-comment"
                     rows={3}
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder="What did you love? Any tips on parking, timing, or scenic viewpoints?"
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0D5C63] focus:border-transparent transition-all"
+                    className="input-field text-sm resize-y"
                   />
                 </div>
 
-                {/* Submit button */}
                 <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={isSubmittingReview}
-                    className="bg-[#0D5C63] text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#0A3F47] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex items-center gap-2"
-                  >
+                  <button type="submit" disabled={isSubmittingReview} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
                     {isSubmittingReview ? (
                       <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Posting...</span>
+                        <span className="w-4 h-4 border-2 border-black/60 border-t-transparent rounded-full animate-spin" />
+                        Posting…
                       </>
                     ) : (
-                      <span>Post Review</span>
+                      'Post Review'
                     )}
                   </button>
                 </div>
               </form>
             </div>
 
-            {/* Reviews List */}
+            {/* Reviews list */}
             {isLoadingReviews ? (
-              <div className="space-y-4 animate-pulse">
-                <div className="h-24 bg-gray-100 rounded-2xl w-full"></div>
-                <div className="h-24 bg-gray-100 rounded-2xl w-full"></div>
+              <div className="space-y-4">
+                <div className="skeleton h-28 w-full" />
+                <div className="skeleton h-28 w-full" />
               </div>
             ) : reviews.length === 0 ? (
-              <div className="bg-[#FAF9F6] p-8 rounded-2xl border border-gray-100 text-center">
-                <MessageSquare className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                <p className="font-semibold text-gray-800">Be the first to share your experience!</p>
-                <p className="text-sm text-gray-500 mt-1">
-                  Help fellow travelers know what to expect at {place.name}.
+              <div className="bg-[#141820] border border-[rgba(255,255,255,0.08)] rounded-[20px] p-10 text-center">
+                <MessageSquare className="w-8 h-8 text-[#334155] mx-auto mb-3" />
+                <p className="text-heading text-white text-base">Be the first to share your experience</p>
+                <p className="text-sm text-[#64748B] mt-1">
+                  Help fellow explorers know what to expect at {place.name}.
                 </p>
               </div>
             ) : (
               <div className="space-y-4">
                 {reviews.map((rev) => (
-                  <div
+                  <article
                     key={rev.id}
-                    className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md"
+                    className="bg-[#141820] border border-[rgba(255,255,255,0.08)] rounded-[20px] p-5"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-[#0D5C63]/10 text-[#0D5C63] font-bold text-xs flex items-center justify-center">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-[#0D9488]/15 border border-[#0D9488]/30 text-[#14B8A6] font-mono text-xs flex items-center justify-center">
                           T{rev.user_id}
                         </div>
-                        <span className="font-semibold text-gray-900 text-sm">
-                          Traveler #{rev.user_id}
-                        </span>
+                        <div>
+                          <p className="text-sm font-semibold text-white">Traveler #{rev.user_id}</p>
+                          <StarRow rating={rev.rating} size="w-3.5 h-3.5" />
+                        </div>
                       </div>
-                      <span className="text-xs text-gray-400">
-                        {new Date(rev.created_at).toLocaleDateString('en-US', {
+                      <span className="text-label text-[#64748B]">
+                        {new Date(rev.created_at).toLocaleDateString('en-IN', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric'
                         })}
                       </span>
                     </div>
-                    {/* Star Badge */}
-                    <div className="flex items-center gap-1 mb-2">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star
-                          key={star}
-                          className={`w-4 h-4 ${
-                            star <= Math.round(rev.rating)
-                              ? 'text-amber-400 fill-amber-400'
-                              : 'text-gray-200'
-                          }`}
-                        />
-                      ))}
-                      <span className="text-xs font-bold text-gray-700 ml-1">
-                        {rev.rating.toFixed(1)}
-                      </span>
-                    </div>
-                    {/* Comment text */}
-                    <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-line">
+                    <p className="text-[#CBD5E1] text-sm leading-relaxed whitespace-pre-line">
                       {rev.comment}
                     </p>
-                  </div>
+                  </article>
                 ))}
               </div>
             )}
-          </section>
-        </div>
+          </RevealSection>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-            <h3 className="font-bold text-gray-900 mb-4">Practical Info</h3>
-            <ul className="space-y-4">
-              <li className="flex gap-3">
-                <Clock className="w-5 h-5 text-gray-400 shrink-0" />
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Visiting Hours</p>
-                  <p className="text-sm text-gray-600">
-                    {formatVisitingHours(place.opening_hours, place.closing_hours)}
-                  </p>
-                </div>
-              </li>
-              <li className="flex gap-3">
-                <Navigation className="w-5 h-5 text-gray-400 shrink-0" />
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Transport Options</p>
-                  <p className="text-sm text-gray-600">{place.transport_options || "Local cabs and buses available"}</p>
-                </div>
-              </li>
-              <li className="flex gap-3">
-                <MapPin className="w-5 h-5 text-gray-400 shrink-0" />
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Nearby Facilities</p>
-                  {place.nearby_facilities ? (
-                    <ul className="text-sm text-gray-600 list-disc pl-4 mt-1">
-                      {place.nearby_facilities.split(',').map((facility, idx) => (
-                        <li key={idx}>{facility.trim()}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <ul className="text-sm text-gray-600 list-disc pl-4 mt-1">
-                      <li>Basic eateries</li>
-                      <li>Restrooms</li>
-                    </ul>
-                  )}
-                </div>
-              </li>
-            </ul>
-
-            <div className="mt-8 pt-6 border-t border-gray-100">
-              <button 
-                onClick={() => navigate(`/groups?destinationId=${place.id}`)}
-                className="w-full bg-[#F59E0B] text-white py-3.5 rounded-xl font-bold hover:bg-[#D97706] transition-all shadow-md hover:shadow-amber-200 flex items-center justify-center gap-2 group"
-              >
-                <Users className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                <span>I want to go (Find Travel Groups)</span>
+          {/* Footer: source + admin */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-6 border-t border-[rgba(255,255,255,0.06)] text-xs text-[#64748B]">
+            <div className="flex items-center gap-4">
+              <span>Source: Community submitted</span>
+              <button className="hover:text-[#F59E0B] flex items-center gap-1 transition-colors">
+                <ExternalLink className="w-3 h-3" /> Report info
               </button>
-              <div className="flex gap-2 mt-3">
-                <button 
-                  onClick={handleSaveToggle}
-                  className={`flex-1 border py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 ${isSaved ? 'bg-[#FFFBEB] border-[#F59E0B]/30 text-[#F59E0B]' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                >
-                  <Bookmark className="w-4 h-4" fill={isSaved ? "currentColor" : "none"} /> 
-                  {isSaved ? 'Saved' : 'Save'}
-                </button>
-                {isAdmin && (
-                  <>
-                    <button 
-                      onClick={handleDelete}
-                      className="flex-1 border py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
-                    >
-                      Delete
-                    </button>
-                    <Link 
-                      to={`/edit/${place.id}`}
-                      className="flex-1 border py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100"
-                    >
-                      Edit
-                    </Link>
-                  </>
-                )}
-              </div>
             </div>
-          </div>
-
-          <div className="bg-[#FAF9F6] p-5 rounded-2xl text-sm border border-gray-100">
-            <p className="text-gray-600 mb-2">
-              Source: <span className="font-medium">Community Submitted</span>
-            </p>
-            <button className="text-xs text-[#0D5C63] font-medium mt-3 flex items-center gap-1 hover:underline">
-              <ExternalLink className="w-3 h-3" /> Report incorrect info
-            </button>
+            {isAdmin && (
+              <div className="flex items-center gap-2">
+                <span className="text-label mr-1">Admin</span>
+                <Link
+                  to={`/edit/${place.id}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[rgba(255,255,255,0.10)] text-[#CBD5E1] hover:text-white hover:border-[rgba(255,255,255,0.24)] transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Edit
+                </Link>
+                <button
+                  onClick={handleDelete}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#EF4444]/30 text-[#F87171] hover:bg-[#EF4444]/10 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {isLightboxOpen && (
+        <PhotoLightbox
+          photos={allPhotos}
+          index={selectedImageIndex}
+          onIndexChange={setSelectedImageIndex}
+          onClose={() => setIsLightboxOpen(false)}
+          name={place.name}
+        />
+      )}
     </div>
   );
 };

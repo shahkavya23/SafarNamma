@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -6,7 +6,6 @@ import {
   MapPin,
   Calendar,
   Users,
-  Sparkles,
   ChevronRight,
   Mountain,
   Droplets,
@@ -16,6 +15,9 @@ import {
 } from 'lucide-react';
 import { placesApi, groupsApi } from '../api/client';
 import type { Place, Group } from '../types';
+import { useScrollReveal } from '../hooks/useScrollReveal';
+import { PlaceCard } from '../components/places/PlaceCard';
+import { useLiveCount } from '../context/PresenceContext';
 
 /* ─── Real Karnataka location images ─── */
 const HERO_IMAGE = '/cinematic/nandi_hills_hero.jpg';
@@ -83,25 +85,6 @@ const CATEGORIES = [
   { label: 'Monuments', icon: Eye, value: 'Monuments' },
 ];
 
-/* ─── Scroll-reveal hook ─── */
-function useScrollReveal() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); observer.disconnect(); } },
-      { threshold: 0.15, rootMargin: '0px 0px -60px 0px' }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  return { ref, visible };
-}
-
 /* ─── Count-up hook ─── */
 function useCountUp(target: number, duration = 1800, start = false) {
   const [value, setValue] = useState(0);
@@ -128,6 +111,7 @@ const HeroOpening: React.FC<{ onSearch: (q: string) => void }> = ({ onSearch }) 
   const [phase, setPhase] = useState(0);
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
+  const liveCount = useLiveCount();
 
   useEffect(() => {
     // Apple rhythm: word 1 → word 2 → word 3 → full hero reveals
@@ -165,16 +149,6 @@ const HeroOpening: React.FC<{ onSearch: (q: string) => void }> = ({ onSearch }) 
       {/* ── Dark canvas (always present) ── */}
       <div className="absolute inset-0 bg-[#0C0E10]" style={{ opacity: phase >= 4 ? 0 : 1, transition: 'opacity 2s ease-out', pointerEvents: 'none' }} />
 
-      {/* ── Live status pill ── */}
-      {phase >= 4 && (
-        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-20 animate-fade-in delay-300">
-          <div className="glass flex items-center gap-2 px-4 py-2 rounded-full">
-            <span className="live-dot" />
-            <span className="text-label text-[#34D399] text-[11px]">47 explorers out this weekend</span>
-          </div>
-        </div>
-      )}
-
       {/* ── The opening word sequence (Apple "hello" equivalent) ── */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 pb-24">
 
@@ -208,6 +182,18 @@ const HeroOpening: React.FC<{ onSearch: (q: string) => void }> = ({ onSearch }) 
         {/* Phase 4+: Full hero content */}
         {phase >= 4 && (
           <div className="w-full max-w-4xl mx-auto">
+            {/* Live presence pill (real open tabs + baseline, from /api/presence) */}
+            {liveCount !== null && (
+              <div className="flex justify-center mb-8 animate-fade-in delay-0">
+                <div className="glass inline-flex items-center gap-2.5 pl-3 pr-4 py-1.5 rounded-full">
+                  <span className="live-dot" />
+                  <span className="text-label text-[11px] text-[#CBD5E1]">
+                    <span className="font-mono text-white">{liveCount}</span> explorers online now
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Eyebrow */}
             <div className="section-label mb-6 animate-fade-up delay-0 justify-center">
               SafarNamma · Bengaluru's Adventure Directory
@@ -311,66 +297,6 @@ const StatStrip: React.FC = () => {
     </div>
   );
 };
-
-/* ════════════════════════════════════════
-   PLACE CARD
-   ════════════════════════════════════════ */
-const PlaceCard: React.FC<{ place: any; index: number; visible: boolean }> = ({ place, index, visible }) => (
-  <Link
-    to={`/places/${place.id || place.slug}`}
-    className={`place-card group block rounded-[20px] overflow-hidden bg-[#141820] card-shadow reveal ${visible ? 'visible' : ''}`}
-    style={{ transitionDelay: `${index * 80}ms` }}
-  >
-    {/* Image */}
-    <div className="relative h-56 overflow-hidden">
-      <img
-        src={place.image_url || HERO_IMAGE}
-        alt={place.name}
-        className="place-card-img w-full h-full object-cover brightness-90 group-hover:brightness-100"
-        loading="lazy"
-        onError={(e) => { (e.target as HTMLImageElement).src = HERO_IMAGE; }}
-      />
-      <div className="absolute inset-0 img-gradient-bottom" />
-
-      {/* Badges */}
-      <div className="absolute top-3 left-3 flex gap-2">
-        {place.is_hidden_gem && (
-          <span className="badge badge-amber">
-            <Sparkles className="w-2.5 h-2.5" /> Hidden Gem
-          </span>
-        )}
-        <span className="badge glass text-white/80">{place.category}</span>
-      </div>
-    </div>
-
-    {/* Body */}
-    <div className="p-5">
-      <h3 className="text-heading text-white text-lg mb-1 group-hover:text-[#F59E0B] transition-colors duration-200 line-clamp-1">
-        {place.name}
-      </h3>
-
-      <div className="flex items-center gap-3 text-label text-[#64748B] mb-3">
-        <span className="flex items-center gap-1">
-          <MapPin className="w-3 h-3 text-[#F59E0B]" />
-          {place.distance_km} KM
-        </span>
-        <span className="w-px h-3 bg-[#334155]" />
-        <span>{place.duration}</span>
-      </div>
-
-      <p className="text-sm text-[#64748B] line-clamp-2 leading-relaxed mb-4">
-        {place.description}
-      </p>
-
-      <div className="flex items-center justify-between text-xs border-t border-[rgba(255,255,255,0.06)] pt-4">
-        <span className="text-[#F59E0B] font-semibold font-mono">
-          {place.budget_tier ? `~₹${place.budget_tier}` : 'Free'}
-        </span>
-        <span className="text-[#475569]">{place.best_season || 'All seasons'}</span>
-      </div>
-    </div>
-  </Link>
-);
 
 /* ════════════════════════════════════════
    FEATURED PLACES SECTION

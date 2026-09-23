@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { FavoritesProvider } from './context/FavoritesContext';
+import { PresenceProvider } from './context/PresenceContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { Layout } from './components/layout/Layout';
 import { HomePage } from './pages/HomePage';
@@ -19,6 +20,7 @@ function App() {
   return (
     <AuthProvider>
       <FavoritesProvider>
+        <PresenceProvider>
         <BrowserRouter>
           <Routes>
           <Route path="/" element={<Layout />}>
@@ -74,6 +76,7 @@ function App() {
         </Route>
       </Routes>
         </BrowserRouter>
+        </PresenceProvider>
       </FavoritesProvider>
     </AuthProvider>
   );

@@ -502,3 +502,21 @@ export const favoritesApi = {
   }
 };
 
+
+export const presenceApi = {
+  // Heartbeat: tells the backend this tab is open; returns the live count
+  ping: async (sessionId: string): Promise<number | null> => {
+    try {
+      const response = await fetch(`${BASE_URL}api/presence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.display;
+    } catch {
+      return null;
+    }
+  },
+};

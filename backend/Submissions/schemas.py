@@ -27,6 +27,9 @@ class DestinationBase(BaseModel) :
     gallery_images : Optional[List[str]] = []
     is_popular_weekend : Optional[bool] = False
 
+class PresencePing(BaseModel):
+    session_id : Annotated[str, Field(..., min_length=8, max_length=64)]
+
 class PopularWeekendPayload(BaseModel):
     destination_ids : List[int]
 
