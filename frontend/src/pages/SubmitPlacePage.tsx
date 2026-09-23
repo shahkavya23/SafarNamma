@@ -130,15 +130,18 @@ export const SubmitPlacePage = () => {
       <div className="absolute top-20 left-0 w-72 h-72 bg-orange-50 rounded-full blur-3xl -ml-32 opacity-60 pointer-events-none z-0"></div>
       
       <div className="mb-12 text-center relative z-10">
-        <h1 className="text-4xl md:text-5xl font-serif font-bold text-[#1a4731] mb-6 leading-tight">
-          Share a hidden gem
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-4">
+          Community Contribution
+        </div>
+        <h1 className="text-4xl md:text-5xl font-serif font-bold text-white mb-4 leading-tight">
+          Share a Hidden Gem
         </h1>
-        <p className="text-gray-600 max-w-xl mx-auto text-lg">
+        <p className="text-slate-400 max-w-xl mx-auto text-base sm:text-lg">
           Know a great spot for a weekend trip? Share it with the community. Detailed submissions help fellow travelers explore better.
         </p>
       </div>
 
-      <div className="bg-white p-8 md:p-10 rounded-3xl border border-gray-100 shadow-xl relative z-10">
+      <div className="bg-white p-8 md:p-10 rounded-3xl border border-gray-100 shadow-2xl relative z-10 text-gray-900">
         {submitError && (
           <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-sm text-rose-900 flex items-start gap-3 animate-shake shadow-sm">
             <Info className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
@@ -164,7 +167,7 @@ export const SubmitPlacePage = () => {
                     type="text" 
                     id="place_name" 
                     name="place_name" 
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl border ${errors.place_name ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`} 
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.place_name ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`} 
                     placeholder="e.g. Avalabetta Viewpoint" 
                   />
                 </div>
@@ -179,7 +182,7 @@ export const SubmitPlacePage = () => {
                     type="text" 
                     id="approximate_location" 
                     name="approximate_location" 
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl border ${errors.approximate_location ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`} 
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.approximate_location ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`} 
                     placeholder="e.g. Chikkaballapur District" 
                   />
                 </div>
@@ -195,7 +198,7 @@ export const SubmitPlacePage = () => {
                 id="description" 
                 name="description" 
                 rows={4} 
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none focus:ring-4 transition-all resize-none" 
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 font-medium focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none focus:ring-4 transition-all resize-none" 
                 placeholder="What makes this place special? Any parking tips or things travelers should be cautious about? (Optional)"
               ></textarea>
             </div>
@@ -218,7 +221,7 @@ export const SubmitPlacePage = () => {
                     id="estimated_cost" 
                     name="estimated_cost" 
                     min="0" 
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl border ${errors.estimated_cost ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`} 
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.estimated_cost ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`} 
                     placeholder="e.g. 0 or 250" 
                   />
                 </div>
@@ -232,11 +235,11 @@ export const SubmitPlacePage = () => {
                   <select 
                     id="category" 
                     name="category" 
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl border ${errors.category ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all appearance-none bg-transparent`}
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl border bg-white text-gray-900 font-medium cursor-pointer ${errors.category ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all appearance-none`}
                   >
-                    <option value="">Select a category</option>
+                    <option value="" className="text-gray-400 bg-white">Select a category</option>
                     {PLACE_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
+                      <option key={cat} value={cat} className="text-gray-900 bg-white">
                         {cat}
                       </option>
                     ))}
@@ -270,7 +273,7 @@ export const SubmitPlacePage = () => {
                 type="url" 
                 id="map_link" 
                 name="map_link" 
-                className={`w-full px-4 py-3 rounded-xl border ${errors.map_link ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`} 
+                className={`w-full px-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.map_link ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`} 
                 placeholder="https://maps.app.goo.gl/... or https://maps.google.com/..." 
               />
               {errors.map_link && (
@@ -300,7 +303,7 @@ export const SubmitPlacePage = () => {
                     type="time"
                     id="opening_hours"
                     name="opening_hours"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none focus:ring-4 transition-all"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 font-medium focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none focus:ring-4 transition-all"
                   />
                 </div>
 
@@ -312,7 +315,7 @@ export const SubmitPlacePage = () => {
                     type="time"
                     id="closing_hours"
                     name="closing_hours"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none focus:ring-4 transition-all"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 font-medium focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none focus:ring-4 transition-all"
                   />
                 </div>
               </div>
@@ -325,7 +328,7 @@ export const SubmitPlacePage = () => {
                   type="text"
                   id="transport_options"
                   name="transport_options"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none focus:ring-4 transition-all"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 font-medium focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none focus:ring-4 transition-all"
                   placeholder="e.g. BMTC Bus 335E or metro station nearby"
                 />
               </div>
@@ -338,7 +341,7 @@ export const SubmitPlacePage = () => {
                   type="text"
                   id="nearby_facilities"
                   name="nearby_facilities"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none focus:ring-4 transition-all"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 font-medium focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none focus:ring-4 transition-all"
                   placeholder="e.g. Restrooms, Parking, Street food stalls (comma-separated)"
                 />
               </div>

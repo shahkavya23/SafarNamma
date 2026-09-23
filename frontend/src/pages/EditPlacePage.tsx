@@ -154,15 +154,18 @@ export const EditPlacePage = () => {
       <div className="absolute top-20 left-0 w-72 h-72 bg-orange-50 rounded-full blur-3xl -ml-32 opacity-60 pointer-events-none z-0"></div>
 
       <div className="mb-12 text-center relative z-10">
-        <h1 className="text-4xl md:text-5xl font-serif font-bold text-[#1a4731] mb-6 leading-tight">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold uppercase tracking-wider mb-4">
+          Admin Portal
+        </div>
+        <h1 className="text-4xl md:text-5xl font-serif font-bold text-white mb-4 leading-tight">
           Edit Place Details
         </h1>
-        <p className="text-gray-600 max-w-xl mx-auto text-lg">
-          Update the information to keep the community informed.
+        <p className="text-slate-400 max-w-xl mx-auto text-base sm:text-lg">
+          Update destination information and keep the community catalog accurate.
         </p>
       </div>
 
-      <div className="bg-white p-8 md:p-10 rounded-3xl border border-gray-100 shadow-xl relative z-10">
+      <div className="bg-white p-8 md:p-10 rounded-3xl border border-gray-100 shadow-2xl relative z-10 text-gray-900">
         <form onSubmit={handleSubmit} className="space-y-8" noValidate>
 
           {/* Section: Basic Info */}
@@ -178,7 +181,7 @@ export const EditPlacePage = () => {
                     type="text"
                     id="place_name"
                     name="place_name"
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl border ${errors.place_name ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.place_name ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
                     placeholder="e.g. Avalabetta Viewpoint"
                     defaultValue={place.name}
                   />
@@ -194,7 +197,7 @@ export const EditPlacePage = () => {
                     type="text"
                     id="approximate_location"
                     name="approximate_location"
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl border ${errors.approximate_location ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.approximate_location ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
                     placeholder="e.g. Chikkaballapur District"
                     defaultValue={place.state}
                   />
@@ -209,7 +212,7 @@ export const EditPlacePage = () => {
                 id="description"
                 name="description"
                 rows={5}
-                className={`w-full px-4 py-3 rounded-xl border ${errors.description ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all resize-none`}
+                className={`w-full px-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.description ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all resize-none`}
                 placeholder="What makes this place special? How is the road condition? Is there anything travelers should be cautious about?"
                 defaultValue={place.description}
               ></textarea>
@@ -231,7 +234,7 @@ export const EditPlacePage = () => {
                     id="estimated_cost"
                     name="estimated_cost"
                     min="0"
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl border ${errors.estimated_cost ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.estimated_cost ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
                     placeholder="500"
                     defaultValue={place.budget_tier}
                   />
@@ -246,12 +249,12 @@ export const EditPlacePage = () => {
                   <select
                     id="category"
                     name="category"
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl border ${errors.category ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all appearance-none bg-transparent`}
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl border bg-white text-gray-900 font-medium cursor-pointer ${errors.category ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all appearance-none`}
                     defaultValue={place.category}
                   >
-                    <option value="">Select a category</option>
+                    <option value="" className="text-gray-400 bg-white">Select a category</option>
                     {PLACE_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
+                      <option key={cat} value={cat} className="text-gray-900 bg-white">
                         {cat}
                       </option>
                     ))}
@@ -281,7 +284,7 @@ export const EditPlacePage = () => {
                 id="map_link"
                 name="map_link"
                 defaultValue={place.map_link || ''}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-4 focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none transition-all"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 font-medium focus:ring-4 focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none transition-all"
                 placeholder="Link to a blog, Google Maps pin, or official website"
               />
             </div>
@@ -307,7 +310,7 @@ export const EditPlacePage = () => {
                     id="opening_hours"
                     name="opening_hours"
                     defaultValue={place.opening_hours || '09:00'}
-                    className={`w-full px-4 py-3 rounded-xl border ${errors.opening_hours ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
+                    className={`w-full px-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.opening_hours ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
                   />
                   {errors.opening_hours && <p className="text-sm text-rose-500 mt-1 flex items-center gap-1"><Info className="w-4 h-4" /> {errors.opening_hours}</p>}
                 </div>
@@ -321,7 +324,7 @@ export const EditPlacePage = () => {
                     id="closing_hours"
                     name="closing_hours"
                     defaultValue={place.closing_hours || '21:00'}
-                    className={`w-full px-4 py-3 rounded-xl border ${errors.closing_hours ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
+                    className={`w-full px-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.closing_hours ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
                   />
                   {errors.closing_hours && <p className="text-sm text-rose-500 mt-1 flex items-center gap-1"><Info className="w-4 h-4" /> {errors.closing_hours}</p>}
                 </div>
@@ -336,7 +339,7 @@ export const EditPlacePage = () => {
                   id="transport_options"
                   name="transport_options"
                   defaultValue={place.transport_options || 'Local cabs and buses available'}
-                  className={`w-full px-4 py-3 rounded-xl border ${errors.transport_options ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
+                  className={`w-full px-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.transport_options ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
                   placeholder="e.g. Local cabs and buses available, Nearest metro 1.5 km"
                 />
                 {errors.transport_options && <p className="text-sm text-rose-500 mt-1 flex items-center gap-1"><Info className="w-4 h-4" /> {errors.transport_options}</p>}
@@ -351,7 +354,7 @@ export const EditPlacePage = () => {
                   id="nearby_facilities"
                   name="nearby_facilities"
                   defaultValue={place.nearby_facilities || 'Basic eateries, Restrooms'}
-                  className={`w-full px-4 py-3 rounded-xl border ${errors.nearby_facilities ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
+                  className={`w-full px-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.nearby_facilities ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
                   placeholder="Comma-separated: Parking, Restrooms, Drinking water, Eateries"
                 />
                 <p className="text-xs text-gray-500">Separate items with commas so they render as bullet points.</p>

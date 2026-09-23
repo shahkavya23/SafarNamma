@@ -73,6 +73,11 @@
     letter-spacing: -0.02em;
   }
 
+  /* Form inputs text visibility */
+  input, textarea, select {
+    color: #0f172a;
+  }
+
   /* Scrollbar — clean, thin */
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: var(--color-canvas); }
