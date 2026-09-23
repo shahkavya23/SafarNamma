@@ -688,6 +688,8 @@ def approve_submission(destination_id: int, payload: schemas.AdminApprovalPayloa
         dest.gallery_images = json.dumps(payload.gallery_images) if payload.gallery_images else None
 
     # Save the mandatory metadata and editorial description provided by the admin
+    if payload.category:
+        dest.category = payload.category
     dest.duration = payload.duration
     dest.best_season = payload.best_season
     dest.description = payload.description

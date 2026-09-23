@@ -1,6 +1,7 @@
 from typing import Optional , List , Annotated
 from pydantic import BaseModel , Field , ConfigDict , field_validator
 from datetime import datetime
+from SQLite.models import VALID_CATEGORIES
 
 class DestinationBase(BaseModel) :
 
@@ -30,6 +31,7 @@ class PopularWeekendPayload(BaseModel):
     destination_ids : List[int]
 
 class AdminApprovalPayload(BaseModel):
+    category : Optional[str] = None
     duration : Annotated[str, Field(..., min_length=1, description="Estimated duration (e.g., 2-3 Hours)")]
     best_season : Annotated[str, Field(..., min_length=1, description="Best season to visit (e.g., Oct - Mar)")]
     description : Annotated[str, Field(..., min_length=10, description="Mandatory editorial description for the destination")]

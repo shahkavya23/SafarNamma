@@ -1,3 +1,21 @@
+export const PLACE_CATEGORIES = [
+  'Park',
+  'Game Zone',
+  'Monuments',
+  'Museums',
+  'Adventure',
+  'Cafe',
+  'Mall',
+  'Entertainment',
+  'Shopping',
+  'Famous Streets',
+  'Religious Places',
+  'Lakes',
+  'Treks',
+] as const;
+
+export type PlaceCategory = (typeof PLACE_CATEGORIES)[number];
+
 export interface Place {
   id: number;
   name: string;

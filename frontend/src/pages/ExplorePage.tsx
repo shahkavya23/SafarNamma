@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Search, MapPin, Filter } from 'lucide-react';
+import { Search, MapPin, Filter, Sparkles, Compass, X, ArrowRight } from 'lucide-react';
 import type { Place } from '../types';
+import { PLACE_CATEGORIES } from '../types';
 import { placesApi } from '../api/client';
 import { cn } from '../utils/cn';
 
@@ -15,7 +16,7 @@ export const ExplorePage = () => {
   const query = searchParams.get('q') || '';
   const categoryFilter = searchParams.get('category') || '';
   const budgetFilter = searchParams.get('budget') || '';
-  
+
   useEffect(() => {
     const fetchPlaces = async () => {
       setIsLoading(true);
@@ -23,22 +24,22 @@ export const ExplorePage = () => {
         const filters: Record<string, string | number> = {};
         if (categoryFilter) filters.category = categoryFilter;
         if (budgetFilter) filters.maxPrice = parseInt(budgetFilter);
-        
+
         let results = await placesApi.getPlaces(filters);
-        
+
         if (query) {
           const q = query.toLowerCase();
-          results = results.filter(p => 
-            p.name.toLowerCase().includes(q) || 
-            p.description.toLowerCase().includes(q) ||
-            p.category.toLowerCase().includes(q)
-
+          results = results.filter(
+            (p) =>
+              p.name.toLowerCase().includes(q) ||
+              p.description.toLowerCase().includes(q) ||
+              p.category.toLowerCase().includes(q)
           );
         }
-        
+
         setPlaces(results);
       } catch (error) {
-        console.error("Failed to fetch places", error);
+        console.error('Failed to fetch places', error);
       } finally {
         setIsLoading(false);
       }
@@ -61,198 +62,308 @@ export const ExplorePage = () => {
     setSearchParams(params);
   };
 
-  const categories = [
-    'Viewpoints', 
-    'Waterfalls', 
-    'Treks', 
-    'Lakes', 
-    'Nature', 
-    'Heritage & Temples', 
-    'Cafes', 
-    'Food & Street Food', 
-    'Shopping', 
-    'Malls & Entertainment', 
-    'Parks & Gardens'
-  ];
+  const categories = PLACE_CATEGORIES;
 
   return (
-    <div className="flex-grow flex flex-col md:flex-row max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 gap-8">
-      
-      {/* Mobile Filter Toggle */}
-      <div className="md:hidden flex justify-between items-center w-full">
-        <h1 className="text-2xl font-serif font-bold text-[#1a4731]">Explore</h1>
-        <button 
-          onClick={() => setIsFilterOpen(!isFilterOpen)}
-          className="flex items-center gap-2 border border-gray-200 px-4 py-2 rounded-lg bg-white shadow-sm"
-        >
-          <Filter className="w-4 h-4" /> Filters
-        </button>
-      </div>
+    <div className="flex flex-col w-full bg-[#070A0D] text-white min-h-screen">
+      {/* ═══════════════════════════════════════════════════════
+          CINEMATIC PANORAMIC HEADER: "The Ridge Overlook"
+          Real-life cinematic photography, dark gradient masks,
+          and integrated search bar.
+          ═══════════════════════════════════════════════════════ */}
+      <div className="relative w-full h-80 sm:h-96 overflow-hidden flex items-end">
+        {/* Real-life visual */}
+        <img
+          src="/cinematic/ghats_summit.jpg"
+          alt="Western Ghats Trailhead"
+          className="absolute inset-0 w-full h-full object-cover object-center filter brightness-[0.75] contrast-[1.05]"
+        />
 
-      {/* Filter Sidebar */}
-      <aside className={cn(
-        "w-full md:w-64 flex-shrink-0 flex flex-col gap-6",
-        isFilterOpen ? "block" : "hidden md:flex"
-      )}>
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm sticky top-24">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="font-bold text-gray-900">Filters</h2>
-            <button 
-              onClick={() => setSearchParams(new URLSearchParams())}
-              className="text-sm text-[#f97316] hover:underline"
-            >
-              Clear all
-            </button>
+        {/* Dark Vignettes & Gradients */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#070A0D] via-[#070A0D]/50 to-black/40" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#070A0D]/90 via-transparent to-black/40" />
+
+        <div className="relative z-10 max-w-7xl mx-auto w-full px-6 sm:px-10 lg:px-12 pb-10">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="w-8 h-[2px] bg-[#F59E0B]" />
+            <span className="text-xs uppercase tracking-[0.25em] font-bold text-[#F59E0B]">
+              OVERLAND WAYPOINTS • KARNATAKA & GHATS
+            </span>
           </div>
 
-          <div className="space-y-6">
-            {/* Search Input for Sidebar (Optional, but good UX) */}
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 block">Search</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Keywords..."
-                  value={query}
-                  onChange={(e) => updateSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/20 focus:border-[#1a4731] transition-all"
-                />
-              </div>
+          <h1 className="font-sans text-3xl sm:text-5xl font-extrabold text-white tracking-tight drop-shadow-lg mb-2">
+            Explore Curated Trails
+          </h1>
+          <p className="text-gray-300 text-xs sm:text-sm max-w-xl mb-6 drop-shadow-md">
+            Secret waterfalls, dawn summits, heritage stone forts, and artisan road-trip stops.
+          </p>
+
+          {/* In-header Search Input */}
+          <div className="relative max-w-xl">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#F59E0B]" />
+            <input
+              type="text"
+              placeholder="Search trails, peaks, categories or vibes..."
+              value={query}
+              onChange={(e) => updateSearch(e.target.value)}
+              className="w-full pl-11 pr-10 py-3 rounded-2xl bg-black/60 backdrop-blur-2xl border border-white/20 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-[#F59E0B] shadow-2xl transition-all"
+            />
+            {query && (
+              <button
+                onClick={() => updateSearch('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════
+          CATEGORY PILLS BAR
+          ═══════════════════════════════════════════════════════ */}
+      <div className="border-y border-white/10 bg-[#0A1118]/80 backdrop-blur-md sticky top-20 z-30">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-12 py-3">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => updateCategory('')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
+                categoryFilter === ''
+                  ? 'bg-[#F59E0B] text-black shadow-lg shadow-amber-500/20'
+                  : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
+              }`}
+            >
+              All Trails
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => updateCategory(cat === categoryFilter ? '' : cat)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
+                  categoryFilter === cat
+                    ? 'bg-[#F59E0B] text-black shadow-lg shadow-amber-500/20'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════
+          MAIN CONTENT (Sidebar + Luxury Cards Grid)
+          ═══════════════════════════════════════════════════════ */}
+      <div className="max-w-7xl mx-auto w-full px-6 sm:px-10 lg:px-12 py-10 flex flex-col md:flex-row gap-8 flex-grow">
+        {/* Mobile Filter Toggle */}
+        <div className="md:hidden flex justify-between items-center w-full">
+          <div className="text-xs text-gray-400">
+            Showing <span className="font-bold text-white">{places.length}</span> destinations
+          </div>
+          <button
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            className="flex items-center gap-2 border border-white/20 px-4 py-2 rounded-xl bg-white/5 text-xs font-semibold text-white"
+          >
+            <Filter className="w-3.5 h-3.5 text-[#F59E0B]" /> Filters
+          </button>
+        </div>
+
+        {/* Filter Sidebar */}
+        <aside
+          className={cn(
+            'w-full md:w-64 flex-shrink-0 flex flex-col gap-6',
+            isFilterOpen ? 'block' : 'hidden md:flex'
+          )}
+        >
+          <div className="bg-[#0F172A]/80 border border-white/10 rounded-3xl p-6 sticky top-36 backdrop-blur-xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="font-bold text-sm uppercase tracking-wider text-white flex items-center gap-2">
+                <Filter className="w-4 h-4 text-[#F59E0B]" /> Filter Trails
+              </h2>
+              {(query || categoryFilter || budgetFilter) && (
+                <button
+                  onClick={() => setSearchParams(new URLSearchParams())}
+                  className="text-xs font-bold text-[#F59E0B] hover:underline"
+                >
+                  Clear all
+                </button>
+              )}
             </div>
 
-            {/* Category Filter */}
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 block">Category</label>
-              <div className="space-y-2">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input
-                    type="radio"
-                    name="category"
-                    checked={categoryFilter === ''}
-                    onChange={() => updateCategory('')}
-                    className="w-4 h-4 text-[#1a4731] focus:ring-[#1a4731] border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700 group-hover:text-[#1a4731] transition-colors">All Categories</span>
+            <div className="space-y-6">
+              {/* Category Radio Group */}
+              <div>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 block">
+                  Category
                 </label>
-                {categories.map(cat => (
-                  <label key={cat} className="flex items-center gap-3 cursor-pointer group">
+                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                  <label className="flex items-center gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-colors">
                     <input
                       type="radio"
                       name="category"
-                      checked={categoryFilter === cat}
-                      onChange={() => updateCategory(cat)}
-                      className="w-4 h-4 text-[#1a4731] focus:ring-[#1a4731] border-gray-300"
+                      checked={categoryFilter === ''}
+                      onChange={() => updateCategory('')}
+                      className="w-4 h-4 text-[#F59E0B] focus:ring-[#F59E0B] border-white/20 bg-transparent"
                     />
-                    <span className="text-sm text-gray-700 group-hover:text-[#1a4731] transition-colors">{cat}</span>
+                    <span className="text-xs text-gray-300 font-medium">All Categories</span>
                   </label>
-                ))}
-              </div>
-            </div>
-            
-            {/* You would add more filters here (Budget, Distance, etc.) based on requirements */}
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-grow flex flex-col min-w-0">
-        
-        {/* Top Bar */}
-        <div className="hidden md:flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-serif font-bold text-[#1a4731]">Discover Places</h1>
-          <div className="text-sm text-gray-500">
-            Showing <span className="font-semibold text-gray-900">{places.length}</span> results
-          </div>
-        </div>
-
-        {/* Loading State */}
-        {isLoading && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="animate-pulse bg-white border border-gray-100 rounded-2xl overflow-hidden h-96">
-                <div className="bg-gray-200 h-56 w-full"></div>
-                <div className="p-5 space-y-4">
-                  <div className="h-6 bg-gray-200 rounded w-2/3"></div>
-                  <div className="h-4 bg-gray-200 rounded w-1/3"></div>
-                  <div className="h-4 bg-gray-200 rounded w-full"></div>
-                  <div className="h-4 bg-gray-200 rounded w-4/5"></div>
+                  {categories.map((cat) => (
+                    <label
+                      key={cat}
+                      className="flex items-center gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-colors"
+                    >
+                      <input
+                        type="radio"
+                        name="category"
+                        checked={categoryFilter === cat}
+                        onChange={() => updateCategory(cat)}
+                        className="w-4 h-4 text-[#F59E0B] focus:ring-[#F59E0B] border-white/20 bg-transparent"
+                      />
+                      <span className="text-xs text-gray-300 font-medium">{cat}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* Empty State */}
-        {!isLoading && places.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 bg-white border border-gray-100 rounded-2xl shadow-sm text-center px-4">
-            <div className="w-16 h-16 bg-[#f5f0e6] rounded-full flex items-center justify-center mb-4">
-              <Search className="w-8 h-8 text-[#1a4731]" />
+              {/* Budget Filter */}
+              <div className="pt-4 border-t border-white/10">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 block">
+                  Max Budget
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Free', val: '0' },
+                    { label: '₹500', val: '500' },
+                    { label: '₹1500', val: '1500' },
+                  ].map((b) => (
+                    <button
+                      key={b.val}
+                      onClick={() => {
+                        const params = new URLSearchParams(searchParams);
+                        if (budgetFilter === b.val) params.delete('budget');
+                        else params.set('budget', b.val);
+                        setSearchParams(params);
+                      }}
+                      className={`px-2 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                        budgetFilter === b.val
+                          ? 'bg-[#F59E0B] text-black border-[#F59E0B]'
+                          : 'bg-white/5 text-gray-400 border-white/10 hover:border-[#F59E0B]/50 hover:text-white'
+                      }`}
+                    >
+                      {b.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No places found</h3>
-            <p className="text-gray-500 max-w-md mx-auto mb-6">
-              We couldn't find any places matching your current filters. Try adjusting your search criteria or clearing filters.
-            </p>
-            <button 
-              onClick={() => setSearchParams(new URLSearchParams())}
-              className="bg-[#1a4731] text-white px-6 py-2 rounded-full font-medium hover:bg-[#123523] transition-colors"
-            >
-              Clear all filters
-            </button>
           </div>
-        )}
+        </aside>
 
-        {/* Results Grid */}
-        {!isLoading && places.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {places.map((place, index) => (
-              <Link 
-                key={place.id} 
-                to={`/places/${place.id}`} 
-                className="group rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden flex flex-col h-full animate-fade-in-up"
-                style={{ animationDelay: `${index * 100}ms` }}
+        {/* Main Content: Place Cards */}
+        <main className="flex-grow flex flex-col min-w-0">
+          <div className="hidden md:flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-white">
+                {categoryFilter ? `${categoryFilter}` : 'All Destinations'}
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Authentic trail notes, GPS pins, and visiting hours
+              </p>
+            </div>
+            <div className="text-xs text-gray-400 font-mono">
+              Showing <span className="font-bold text-[#F59E0B]">{places.length}</span> spots
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className="h-96 rounded-3xl bg-white/5 border border-white/10 animate-pulse"
+                />
+              ))}
+            </div>
+          ) : places.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 bg-white/5 border border-white/10 rounded-3xl text-center px-4">
+              <div className="w-16 h-16 bg-white/10 text-[#F59E0B] rounded-2xl flex items-center justify-center mb-4">
+                <Search className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">No trails found</h3>
+              <p className="text-gray-400 max-w-md mx-auto mb-6 text-xs">
+                No spots matched your current search filters. Try clearing criteria to explore more road trips.
+              </p>
+              <button
+                onClick={() => setSearchParams(new URLSearchParams())}
+                className="bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-black font-bold px-6 py-2.5 rounded-full text-xs uppercase tracking-wider"
               >
-                <div className="relative h-56 overflow-hidden">
-                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors duration-300 z-10"></div>
-                  <img 
-                    src={place.image_url || 'https://images.unsplash.com/photo-1506461883276-594543d04e12'} 
-                    alt={place.name} 
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1506461883276-594543d04e12';
-                    }}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                    loading="lazy"
-                  />
-                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-semibold text-[#1a4731] shadow-sm z-20">
-                    {place.category}
-                  </div>
-                </div>
-                <div className="p-5 flex flex-col flex-grow">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-[#1a4731] transition-colors line-clamp-1">{place.name}</h3>
-                  </div>
-                  <p className="text-sm text-gray-500 mb-3 flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5" /> {place.distance_km} km • {place.duration}
-                  </p>
-                  <p className="text-gray-600 text-sm line-clamp-2 mb-4 flex-grow">{place.description}</p>
-                  
-                  <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-                    <span className="text-sm font-medium text-[#f97316]">
-                      ~₹{place.budget_tier}
-                    </span>
-                    {place.best_season && (
-                      <span className="text-xs text-gray-500 bg-[#f5f0e6] px-2 py-1 rounded-md">
-                        {place.best_season}
-                      </span>
+                Reset All Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {places.map((place) => (
+                <Link
+                  key={place.id}
+                  to={`/places/${place.id}`}
+                  className="group relative rounded-3xl bg-[#0F172A]/80 border border-white/10 overflow-hidden flex flex-col hover:border-[#F59E0B]/50 transition-all duration-500 hover:-translate-y-1.5 shadow-xl"
+                >
+                  <div className="relative h-56 overflow-hidden">
+                    <img
+                      src={place.image_url || 'https://images.unsplash.com/photo-1506461883276-594543d04e12'}
+                      alt={place.name}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          'https://images.unsplash.com/photo-1506461883276-594543d04e12';
+                      }}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 brightness-90 group-hover:brightness-100"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-black/30" />
+
+                    <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold text-[#F59E0B] border border-white/10">
+                      {place.category}
+                    </div>
+
+                    {place.is_hidden_gem && (
+                      <div className="absolute top-4 left-4 bg-[#F59E0B] text-black font-bold px-2.5 py-1 rounded-full text-[11px] flex items-center gap-1 shadow-md">
+                        <Sparkles className="w-3 h-3" /> Hidden Gem
+                      </div>
                     )}
                   </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </main>
+
+                  <div className="p-5 flex flex-col flex-grow justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-white group-hover:text-[#F59E0B] transition-colors line-clamp-1 mb-1.5">
+                        {place.name}
+                      </h3>
+                      <p className="text-xs text-gray-400 mb-2 flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-[#F59E0B]" />
+                        <span>{place.distance_km} KM from Bengaluru</span>
+                        <span>•</span>
+                        <span>{place.duration}</span>
+                      </p>
+                      <p className="text-gray-400 text-xs line-clamp-2 leading-relaxed mb-4">
+                        {place.description}
+                      </p>
+                    </div>
+
+                    <div className="pt-4 border-t border-white/10 flex items-center justify-between text-xs">
+                      <span className="font-semibold text-white">
+                        {place.budget_tier ? `~₹${place.budget_tier}` : 'Free Entry'}
+                      </span>
+                      <span className="text-gray-400">{place.best_season || 'All Seasons'}</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 };

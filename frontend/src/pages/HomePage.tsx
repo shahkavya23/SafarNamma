@@ -1,240 +1,741 @@
-import React, { useEffect, useState } from 'react';
-import { Search, MapPin, Compass, ArrowRight, ShieldCheck, Users, Star, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { placesApi } from '../api/client';
-import type { Place } from '../types';
+import {
+  Search,
+  ArrowRight,
+  MapPin,
+  Calendar,
+  Users,
+  Sparkles,
+  ChevronRight,
+  Mountain,
+  Droplets,
+  Coffee,
+  Eye,
+  Tent,
+} from 'lucide-react';
+import { placesApi, groupsApi } from '../api/client';
+import type { Place, Group } from '../types';
 
-const quickFilters = [
-  { label: 'Treks & Hiking', value: 'Treks', icon: '🥾' },
-  { label: 'Waterfalls', value: 'Waterfalls', icon: '🌊' },
-  { label: 'Lakes & Sunsets', value: 'Lakes', icon: '🌅' },
-  { label: 'Heritage & History', value: 'Heritage', icon: '🏰' },
-  { label: 'Scenic Escapes', value: 'Nature', icon: '🌲' },
+/* ─── Real Karnataka location images ─── */
+const HERO_IMAGE = '/cinematic/nandi_hills_hero.jpg';
+const GHATS_IMAGE = '/cinematic/western_ghats_road.jpg';
+const FRIENDS_IMAGE = '/cinematic/friends_convoy.jpg';
+
+/* ─── Seeded place cards (fallback when API empty) ─── */
+const SEED_PLACES = [
+  {
+    id: 'skandagiri',
+    name: 'Skandagiri Sunrise Trek',
+    category: 'Trek',
+    distance_km: 62,
+    duration: '4 hrs',
+    image_url: '/cinematic/skandagiri_sunrise.jpg',
+    is_hidden_gem: true,
+    description: 'A moonlit trek to the granite peak above Chikkaballapur, rewarded by a sea of clouds at sunrise.',
+    best_season: 'Oct – Feb',
+    budget_tier: '500',
+  },
+  {
+    id: 'coorg-falls',
+    name: 'Abbey Falls, Coorg',
+    category: 'Waterfall',
+    distance_km: 248,
+    duration: '5.5 hrs',
+    image_url: '/cinematic/coorg_waterfall.jpg',
+    is_hidden_gem: false,
+    description: 'Coffee and spice plantations frame a 70-ft cascade into emerald pools. Best after monsoon rains.',
+    best_season: 'Jul – Oct',
+    budget_tier: '1200',
+  },
+  {
+    id: 'nandi',
+    name: 'Nandi Hills at Dawn',
+    category: 'Viewpoint',
+    distance_km: 58,
+    duration: '1.5 hrs',
+    image_url: '/cinematic/nandi_hills_hero.jpg',
+    is_hidden_gem: true,
+    description: 'The winding hill road to Nandi crests above a golden fog-sea every morning between October and March.',
+    best_season: 'Oct – Mar',
+    budget_tier: '300',
+  },
+  {
+    id: 'western-ghats',
+    name: 'Western Ghats Monsoon Drive',
+    category: 'Road Trip',
+    distance_km: 120,
+    duration: '3 hrs',
+    image_url: '/cinematic/western_ghats_road.jpg',
+    is_hidden_gem: true,
+    description: 'A serpentine highway through rain-drenched emerald forest. Waterfalls appear around every bend.',
+    best_season: 'Jun – Sep',
+    budget_tier: '800',
+  },
 ];
 
-export const HomePage = () => {
+/* ─── Category quick filters ─── */
+const CATEGORIES = [
+  { label: 'Treks', icon: Mountain, value: 'Treks' },
+  { label: 'Cafe', icon: Coffee, value: 'Cafe' },
+  { label: 'Lakes', icon: Droplets, value: 'Lakes' },
+  { label: 'Adventure', icon: Tent, value: 'Adventure' },
+  { label: 'Monuments', icon: Eye, value: 'Monuments' },
+];
+
+/* ─── Scroll-reveal hook ─── */
+function useScrollReveal() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); observer.disconnect(); } },
+      { threshold: 0.15, rootMargin: '0px 0px -60px 0px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, visible };
+}
+
+/* ─── Count-up hook ─── */
+function useCountUp(target: number, duration = 1800, start = false) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (!start) return;
+    let startTime: number;
+    const step = (now: number) => {
+      if (!startTime) startTime = now;
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.floor(eased * target));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [target, duration, start]);
+  return value;
+}
+
+/* ════════════════════════════════════════
+   HERO OPENING SECTION
+   Apple-style: One word at a time, then the world opens up
+   ════════════════════════════════════════ */
+const HeroOpening: React.FC<{ onSearch: (q: string) => void }> = ({ onSearch }) => {
+  const [phase, setPhase] = useState(0);
+  const [query, setQuery] = useState('');
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [featuredPlaces, setFeaturedPlaces] = useState<Place[]>([]);
-  const [isLoadingFeatured, setIsLoadingFeatured] = useState(true);
+
+  useEffect(() => {
+    // Apple rhythm: word 1 → word 2 → word 3 → full hero reveals
+    const timings = [300, 900, 1500, 2400];
+    const timers = timings.map((delay, i) =>
+      setTimeout(() => setPhase(i + 1), delay)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/explore?q=${encodeURIComponent(searchQuery.trim())}`);
-    } else {
-      navigate('/explore');
-    }
+    if (query.trim()) navigate(`/explore?q=${encodeURIComponent(query.trim())}`);
+    else navigate('/explore');
   };
 
-  useEffect(() => {
-    const fetchWeekendPlaces = async () => {
-      try {
-        const data = await placesApi.getPopularWeekend();
-        setFeaturedPlaces(data);
-      } catch (error) {
-        console.error("Failed to load weekend places:", error);
-      } finally {
-        setIsLoadingFeatured(false);
-      }
-    };
-    fetchWeekendPlaces();
-  }, []);
-
   return (
-    <div className="flex flex-col w-full">
-      {/* Hero Section */}
-      <section className="relative w-full py-20 lg:py-32 overflow-hidden flex flex-col items-center text-center px-4">
-        <div className="absolute inset-0 bg-[#f5f0e6] -z-10" />
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#f97316]/10 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 -z-10" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[#1a4731]/5 rounded-full blur-[120px] translate-y-1/3 -translate-x-1/4 -z-10" />
-        
-        <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <h1 className="font-serif text-5xl md:text-6xl lg:text-7xl font-bold text-[#1a4731] leading-tight tracking-tight">
-            Stop asking where to go. <br className="hidden md:block" />
-            <span className="text-[#f97316]">Start discovering somewhere new.</span>
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            Discover hidden gems, practical weekend escapes, and trustworthy places around Bangalore designed for students and young professionals.
-          </p>
+    <section className="relative w-full min-h-screen overflow-hidden">
+      {/* ── Background image (reveals with phase) ── */}
+      <div
+        className="absolute inset-0 transition-opacity duration-[2000ms] ease-out"
+        style={{ opacity: phase >= 4 ? 1 : 0 }}
+      >
+        <img
+          src={HERO_IMAGE}
+          alt="Nandi Hills at dawn"
+          className="w-full h-full object-cover object-center"
+          loading="eager"
+        />
+        {/* Overlays */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0C0E10] via-[#0C0E10]/50 to-[#0C0E10]/30" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0C0E10]/80 via-transparent to-transparent" />
+      </div>
 
-          {/* Search Box */}
-          <div className="w-full max-w-2xl mx-auto mt-10">
-            <form onSubmit={handleSearch} className="relative flex items-center shadow-lg rounded-full bg-white border border-gray-100 p-2">
-              <MapPin className="absolute left-6 w-6 h-6 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Where to? Try 'Nandi Hills', 'Trek', or 'Waterfalls'..."
-                className="w-full pl-16 pr-32 py-4 rounded-full focus:outline-none text-lg bg-transparent"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <button 
-                type="submit"
-                className="absolute right-3 bg-[#1a4731] text-white px-8 py-3 rounded-full font-medium hover:bg-[#123523] transition-colors flex items-center gap-2"
-              >
-                Search <Search className="w-4 h-4" />
-              </button>
-            </form>
-          </div>
+      {/* ── Dark canvas (always present) ── */}
+      <div className="absolute inset-0 bg-[#0C0E10]" style={{ opacity: phase >= 4 ? 0 : 1, transition: 'opacity 2s ease-out', pointerEvents: 'none' }} />
 
-          {/* Quick Filters */}
-          <div className="flex flex-wrap justify-center gap-3 mt-10 max-w-3xl mx-auto">
-            {quickFilters.map((filter) => (
-              <Link
-                key={filter.label}
-                to={`/explore?category=${encodeURIComponent(filter.value)}`}
-                className="bg-white border border-gray-200 px-4 py-2 rounded-full text-sm font-medium text-gray-700 hover:border-[#f97316] hover:text-[#f97316] hover:shadow-md transition-all flex items-center gap-2"
-              >
-                <span>{filter.icon}</span>
-                {filter.label}
-              </Link>
-            ))}
+      {/* ── Live status pill ── */}
+      {phase >= 4 && (
+        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-20 animate-fade-in delay-300">
+          <div className="glass flex items-center gap-2 px-4 py-2 rounded-full">
+            <span className="live-dot" />
+            <span className="text-label text-[#34D399] text-[11px]">47 explorers out this weekend</span>
           </div>
         </div>
-      </section>
+      )}
 
-      {/* Featured Destinations */}
-      <section className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <div className="flex justify-between items-end mb-12">
-          <div>
-            <h2 className="text-3xl font-serif font-bold text-[#1a4731] mb-4">Popular this weekend</h2>
-            <p className="text-gray-600 max-w-xl">Curated spots perfect for your next quick getaway from the city hustle.</p>
-          </div>
-          <Link to="/explore" className="hidden sm:flex items-center gap-2 text-[#f97316] font-medium hover:gap-3 transition-all">
-            See all places <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
+      {/* ── The opening word sequence (Apple "hello" equivalent) ── */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 pb-24">
 
-        {isLoadingFeatured ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[1, 2, 3].map((n) => (
-              <div key={n} className="rounded-2xl bg-gray-100 h-96 animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuredPlaces.map(place => (
-              <Link key={place.id} to={`/places/${place.id}`} className="group rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-xl transition-all overflow-hidden flex flex-col h-full">
-                <div className="relative h-64 overflow-hidden">
-                  <img 
-                    src={place.image_url || 'https://images.unsplash.com/photo-1506461883276-594543d04e12'} 
-                    alt={place.name} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1506461883276-594543d04e12';
-                    }}
-                  />
-                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-semibold text-[#1a4731] shadow-sm">
-                    {place.category}
-                  </div>
-                  {place.is_hidden_gem && (
-                    <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[11px] font-medium flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-yellow-400" /> Hidden Gem
-                    </div>
-                  )}
-                </div>
-                <div className="p-6 flex flex-col flex-grow">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-[#1a4731] transition-colors">{place.name}</h3>
-                    <span className="text-sm font-medium text-[#f97316] bg-[#f97316]/10 px-2.5 py-1 rounded-md whitespace-nowrap">
-                      {place.budget_tier ? `₹${place.budget_tier}` : 'Free'}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-500 mb-3 flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-gray-400" /> {place.state || 'Karnataka'}
-                    {place.duration && ` • ${place.duration}`}
-                  </p>
-                  <p className="text-gray-600 text-sm line-clamp-2 mb-4 flex-grow">{place.description}</p>
-                  {place.rating > 0 && (
-                    <div className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-md w-fit mt-auto">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                      <span>{place.rating.toFixed(1)}</span>
-                    </div>
-                  )}
-                </div>
-              </Link>
-            ))}
+        {/* Phase 1: First word */}
+        {phase === 1 && (
+          <span
+            className="text-display text-white animate-scale-in"
+            style={{ fontSize: 'clamp(80px, 14vw, 160px)' }}
+          >
+            Escape.
+          </span>
+        )}
+
+        {/* Phase 2: Second word */}
+        {phase === 2 && (
+          <div className="flex flex-col items-center gap-2 animate-scale-in">
+            <span className="text-display text-white" style={{ fontSize: 'clamp(80px, 14vw, 160px)' }}>Escape.</span>
+            <span className="text-display text-[#F59E0B]" style={{ fontSize: 'clamp(80px, 14vw, 160px)' }}>Discover.</span>
           </div>
         )}
-        
-        <div className="mt-8 text-center sm:hidden">
-          <Link to="/explore" className="inline-flex items-center gap-2 text-[#f97316] font-medium border border-[#f97316] px-6 py-3 rounded-full hover:bg-[#f97316] hover:text-white transition-colors">
-            See all places <ArrowRight className="w-4 h-4" />
+
+        {/* Phase 3: Third word */}
+        {phase === 3 && (
+          <div className="flex flex-col items-center gap-2 animate-scale-in">
+            <span className="text-display text-white" style={{ fontSize: 'clamp(80px, 14vw, 160px)' }}>Escape.</span>
+            <span className="text-display text-[#F59E0B]" style={{ fontSize: 'clamp(80px, 14vw, 160px)' }}>Discover.</span>
+            <span className="text-display text-[#14B8A6]" style={{ fontSize: 'clamp(80px, 14vw, 160px)' }}>Together.</span>
+          </div>
+        )}
+
+        {/* Phase 4+: Full hero content */}
+        {phase >= 4 && (
+          <div className="w-full max-w-4xl mx-auto">
+            {/* Eyebrow */}
+            <div className="section-label mb-6 animate-fade-up delay-0 justify-center">
+              SafarNamma · Bengaluru's Adventure Directory
+            </div>
+
+            {/* Headline */}
+            <h1
+              className="text-display text-center text-white mb-6 animate-scale-in delay-60"
+              style={{ fontSize: 'clamp(40px, 7vw, 88px)' }}
+            >
+              Your City Has{' '}
+              <span className="text-gradient-amber">Secrets.</span>
+              <br />
+              We Have the Map.
+            </h1>
+
+            {/* Subheading */}
+            <p className="text-center text-[#CBD5E1] text-lg max-w-xl mx-auto mb-10 animate-fade-up delay-120 leading-relaxed">
+              Discover hidden trails, cafes, and viewpoints near Bengaluru.
+              <br />
+              Form a convoy. Don't go alone.
+            </p>
+
+            {/* Search bar */}
+            <form
+              onSubmit={handleSearch}
+              className="search-bar flex items-center gap-3 px-4 py-3 max-w-2xl mx-auto mb-6 animate-fade-up delay-180"
+            >
+              <Search className="w-5 h-5 text-[#F59E0B] shrink-0" />
+              <input
+                type="text"
+                placeholder="Search trails, waterfalls, cafes near Bengaluru…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                className="flex-1 bg-transparent text-white placeholder-[#64748B] text-sm focus:outline-none"
+              />
+              <button type="submit" className="btn-primary py-2 px-5 text-xs shrink-0">
+                Explore <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </form>
+
+            {/* Quick filter pills */}
+            <div className="flex flex-wrap gap-2 justify-center animate-fade-up delay-240">
+              {CATEGORIES.map(({ label, icon: Icon, value }) => (
+                <button
+                  key={value}
+                  onClick={() => navigate(`/explore?category=${encodeURIComponent(value)}`)}
+                  className="btn-ghost py-2 px-4 text-xs flex items-center gap-1.5"
+                >
+                  <Icon className="w-3.5 h-3.5 text-[#F59E0B]" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Scroll indicator */}
+      {phase >= 4 && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 animate-fade-in delay-500">
+          <span className="text-label text-[#475569] text-[10px]">Scroll to explore</span>
+          <div className="w-5 h-8 rounded-full border border-[#334155] flex items-start justify-center p-1.5">
+            <div className="w-1 h-2 bg-[#F59E0B] rounded-full animate-bounce" />
+          </div>
+        </div>
+      )}
+    </section>
+  );
+};
+
+/* ════════════════════════════════════════
+   STAT STRIP
+   ════════════════════════════════════════ */
+const StatStrip: React.FC = () => {
+  const { ref, visible } = useScrollReveal();
+  const places = useCountUp(200, 1600, visible);
+  const explorers = useCountUp(1400, 1800, visible);
+  const convoys = useCountUp(85, 1400, visible);
+
+  return (
+    <div ref={ref} className="w-full border-y border-[rgba(255,255,255,0.06)] py-12">
+      <div className="max-w-5xl mx-auto px-6 grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
+        {[
+          { value: places, suffix: '+', label: 'Verified Places' },
+          { value: explorers, suffix: '+', label: 'Weekend Explorers' },
+          { value: convoys, suffix: '', label: 'Active Convoys' },
+        ].map(({ value, suffix, label }, i) => (
+          <div
+            key={label}
+            className={`reveal ${visible ? 'visible' : ''}`}
+            style={{ transitionDelay: `${i * 120}ms` }}
+          >
+            <div className="text-display text-white mb-1" style={{ fontSize: '3rem' }}>
+              {value}{suffix}
+            </div>
+            <div className="text-label text-[#475569]">{label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════
+   PLACE CARD
+   ════════════════════════════════════════ */
+const PlaceCard: React.FC<{ place: any; index: number; visible: boolean }> = ({ place, index, visible }) => (
+  <Link
+    to={`/places/${place.id || place.slug}`}
+    className={`place-card group block rounded-[20px] overflow-hidden bg-[#141820] card-shadow reveal ${visible ? 'visible' : ''}`}
+    style={{ transitionDelay: `${index * 80}ms` }}
+  >
+    {/* Image */}
+    <div className="relative h-56 overflow-hidden">
+      <img
+        src={place.image_url || HERO_IMAGE}
+        alt={place.name}
+        className="place-card-img w-full h-full object-cover brightness-90 group-hover:brightness-100"
+        loading="lazy"
+        onError={(e) => { (e.target as HTMLImageElement).src = HERO_IMAGE; }}
+      />
+      <div className="absolute inset-0 img-gradient-bottom" />
+
+      {/* Badges */}
+      <div className="absolute top-3 left-3 flex gap-2">
+        {place.is_hidden_gem && (
+          <span className="badge badge-amber">
+            <Sparkles className="w-2.5 h-2.5" /> Hidden Gem
+          </span>
+        )}
+        <span className="badge glass text-white/80">{place.category}</span>
+      </div>
+    </div>
+
+    {/* Body */}
+    <div className="p-5">
+      <h3 className="text-heading text-white text-lg mb-1 group-hover:text-[#F59E0B] transition-colors duration-200 line-clamp-1">
+        {place.name}
+      </h3>
+
+      <div className="flex items-center gap-3 text-label text-[#64748B] mb-3">
+        <span className="flex items-center gap-1">
+          <MapPin className="w-3 h-3 text-[#F59E0B]" />
+          {place.distance_km} KM
+        </span>
+        <span className="w-px h-3 bg-[#334155]" />
+        <span>{place.duration}</span>
+      </div>
+
+      <p className="text-sm text-[#64748B] line-clamp-2 leading-relaxed mb-4">
+        {place.description}
+      </p>
+
+      <div className="flex items-center justify-between text-xs border-t border-[rgba(255,255,255,0.06)] pt-4">
+        <span className="text-[#F59E0B] font-semibold font-mono">
+          {place.budget_tier ? `~₹${place.budget_tier}` : 'Free'}
+        </span>
+        <span className="text-[#475569]">{place.best_season || 'All seasons'}</span>
+      </div>
+    </div>
+  </Link>
+);
+
+/* ════════════════════════════════════════
+   FEATURED PLACES SECTION
+   ════════════════════════════════════════ */
+const FeaturedPlaces: React.FC<{ places: any[] }> = ({ places }) => {
+  const { ref, visible } = useScrollReveal();
+  const displayPlaces = places.length > 0 ? places.slice(0, 4) : SEED_PLACES;
+
+  return (
+    <section ref={ref} className="py-24 px-6 max-w-7xl mx-auto w-full">
+      {/* Header */}
+      <div className={`reveal ${visible ? 'visible' : ''} mb-14`}>
+        <div className="section-label">✦ Handpicked This Weekend</div>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <h2 className="text-display text-white" style={{ fontSize: 'clamp(32px, 5vw, 52px)' }}>
+            Places Google<br />
+            <span className="text-gradient-amber">Doesn't Know Yet.</span>
+          </h2>
+          <Link
+            to="/explore"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#F59E0B] hover:gap-3 transition-all duration-200 shrink-0"
+          >
+            Explore All 200+ Places <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
-      </section>
+      </div>
 
-      {/* Community / Groups Section */}
-      <section className="py-24 bg-[#1a4731] text-white overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-[#2c6e4d] rounded-full blur-[100px] opacity-50 -translate-y-1/2 translate-x-1/2"></div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div className="space-y-8">
-              <h2 className="text-4xl font-serif font-bold text-[#f3eee8]">Find people who want to go too.</h2>
-              <p className="text-[#8da3a6] text-lg leading-relaxed">
-                Traveling is better together. Discover upcoming group trips organized by other students and young professionals, or create your own plan and invite others to join and split costs.
-              </p>
-              <div className="flex flex-wrap gap-4 pt-4">
-                <Link to="/groups" className="bg-[#f97316] text-white px-8 py-4 rounded-full font-medium hover:bg-[#ea580c] transition-colors shadow-lg flex items-center gap-2">
-                  <Users className="w-5 h-5" /> Find a Group
-                </Link>
-                <Link to="/explore" className="bg-white/10 border border-white/20 text-white px-8 py-4 rounded-full font-medium hover:bg-white/20 transition-colors flex items-center gap-2">
-                  <Compass className="w-5 h-5" /> Explore Places
-                </Link>
-              </div>
-            </div>
-            
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-[#1a4731] to-transparent z-10 w-12 hidden lg:block"></div>
-              {/* Dummy Group Cards for visual */}
-              <div className="space-y-4 transform lg:rotate-3 lg:translate-x-12 opacity-90">
-                {[1, 2].map((i) => (
-                  <div key={i} className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-2xl flex items-center justify-between">
-                    <div>
-                      <h4 className="font-bold text-lg mb-1">Skandagiri Night Trek</h4>
-                      <p className="text-sm text-[#8da3a6] flex items-center gap-2">
-                        <span>This Saturday</span> • <span>4 spots left</span>
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 rounded-full bg-[#f97316]/20 flex items-center justify-center border border-[#f97316]/50">
-                      <ArrowRight className="w-5 h-5 text-[#f97316]" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Bento grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {displayPlaces.map((place, i) => (
+          <PlaceCard key={place.id} place={place} index={i} visible={visible} />
+        ))}
+      </div>
+    </section>
+  );
+};
 
-      {/* Trust Section */}
-      <section className="py-24 bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center justify-center p-4 bg-[#f3eee8] rounded-2xl mb-8">
-            <ShieldCheck className="w-12 h-12 text-[#1a4731]" />
+/* ════════════════════════════════════════
+   COMMUNITY SECTION (full-bleed photo)
+   Apple-style: One powerful image + one idea
+   ════════════════════════════════════════ */
+const CommunitySection: React.FC = () => {
+  const { ref, visible } = useScrollReveal();
+
+  return (
+    <section ref={ref} className="relative w-full min-h-[70vh] overflow-hidden flex items-center">
+      {/* Background */}
+      <img
+        src={FRIENDS_IMAGE}
+        alt="Friends on a convoy trip in Karnataka"
+        className="absolute inset-0 w-full h-full object-cover object-center brightness-50"
+        loading="lazy"
+      />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#0C0E10]/95 via-[#0C0E10]/60 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#0C0E10] via-transparent to-transparent" />
+
+      {/* Content */}
+      <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-10 py-20">
+        <div className="max-w-xl">
+          <div className={`reveal ${visible ? 'visible' : ''}`}>
+            <div className="section-label">🏕️ The Basecamp · Community Convoys</div>
           </div>
-          <h2 className="text-3xl font-serif font-bold text-[#1a4731] mb-6">Safety and Trust First</h2>
-          <p className="text-gray-600 max-w-2xl mx-auto text-lg leading-relaxed mb-12">
-            Every place submitted to RoamLocal is reviewed for basic safety and accessibility. We look out for each other, providing realistic costs, local tips, and transport options so you know exactly what to expect.
+
+          <h2
+            className={`text-display text-white mt-4 mb-6 reveal ${visible ? 'visible' : ''}`}
+            style={{ fontSize: 'clamp(36px, 5vw, 60px)', transitionDelay: '80ms' }}
+          >
+            Don't Go Alone.
+            <br />
+            <span className="text-[#14B8A6]">Find Your Convoy.</span>
+          </h2>
+
+          <p className={`text-[#CBD5E1] text-lg leading-relaxed mb-8 reveal ${visible ? 'visible' : ''}`} style={{ transitionDelay: '160ms' }}>
+            Join weekend trips organized by students and explorers from your city.
+            Split fuel, share memories, make friends you didn't know you needed.
           </p>
-          <div className="grid md:grid-cols-3 gap-8 text-left max-w-4xl mx-auto">
-            <div className="p-6 rounded-2xl border border-gray-100 bg-[#faf9f6]">
-              <h3 className="font-bold text-lg mb-2 text-gray-900">Verified Info</h3>
-              <p className="text-gray-600 text-sm">We verify crucial details like entry times and current open status.</p>
-            </div>
-            <div className="p-6 rounded-2xl border border-gray-100 bg-[#faf9f6]">
-              <h3 className="font-bold text-lg mb-2 text-gray-900">Practical Costs</h3>
-              <p className="text-gray-600 text-sm">Realistic student-friendly budgets for travel, food, and entry fees.</p>
-            </div>
-            <div className="p-6 rounded-2xl border border-gray-100 bg-[#faf9f6]">
-              <h3 className="font-bold text-lg mb-2 text-gray-900">Clear Guidelines</h3>
-              <p className="text-gray-600 text-sm">Honest recommendations and transport options so you can plan safely.</p>
-            </div>
+
+          <div className={`flex flex-wrap gap-4 reveal ${visible ? 'visible' : ''}`} style={{ transitionDelay: '240ms' }}>
+            <Link to="/groups" className="btn-teal">
+              <Users className="w-4 h-4" />
+              Browse Active Convoys
+            </Link>
+            <Link to="/groups" className="btn-ghost">
+              Create Your Own
+              <ChevronRight className="w-4 h-4" />
+            </Link>
           </div>
         </div>
-      </section>
-    </div>
+      </div>
+    </section>
+  );
+};
+
+/* ════════════════════════════════════════
+   GROUP CARD
+   ════════════════════════════════════════ */
+const GroupCard: React.FC<{ group: Group; index: number; visible: boolean }> = ({ group, index, visible }) => {
+  const spotsLeft = group.max_members - group.current_members;
+  const isFull = spotsLeft === 0;
+  const isLow = spotsLeft > 0 && spotsLeft <= 3;
+
+  return (
+    <Link
+      to={`/groups/${group.id}`}
+      className={`group-card block bg-[#141820] border border-[rgba(255,255,255,0.08)] rounded-[20px] overflow-hidden card-shadow teal-accent reveal ${visible ? 'visible' : ''}`}
+      style={{ transitionDelay: `${index * 80}ms` }}
+    >
+      {/* Date strip */}
+      <div className="bg-[#0D9488]/20 border-b border-[rgba(13,148,136,0.20)] px-5 py-3 flex justify-between items-center">
+        <div className="flex items-center gap-2 text-label text-[#14B8A6]">
+          <Calendar className="w-3.5 h-3.5" />
+          {new Date(group.trip_date).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })}
+        </div>
+        {/* Spot status */}
+        {isFull ? (
+          <span className="badge badge-danger">Full</span>
+        ) : isLow ? (
+          <span className="badge badge-amber">🔥 {spotsLeft} left</span>
+        ) : (
+          <span className="badge badge-success">{spotsLeft} open</span>
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="p-5">
+        {/* Destination chip */}
+        {group.custom_destination && (
+          <div className="badge badge-teal mb-3">{group.custom_destination}</div>
+        )}
+
+        <h4 className="text-heading text-white text-base mb-4 line-clamp-2 group-hover:text-[#14B8A6] transition-colors duration-200">
+          {group.title}
+        </h4>
+
+        <div className="space-y-2 text-xs text-[#64748B] mb-5">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-3.5 h-3.5 text-[#F59E0B]" />
+            <span className="line-clamp-1">Meet: {group.meeting_area}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="w-3.5 h-3.5 text-[#F59E0B]" />
+            <span>{group.current_members}/{group.max_members} members</span>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center pt-4 border-t border-[rgba(255,255,255,0.06)]">
+          <span className="font-mono text-sm font-semibold text-white">₹{group.estimated_cost}<span className="text-[#64748B] font-normal text-xs">/person</span></span>
+          <span className="text-xs font-semibold text-[#14B8A6] flex items-center gap-1">
+            View Details <ChevronRight className="w-3.5 h-3.5" />
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+};
+
+/* ════════════════════════════════════════
+   ACTIVE GROUPS SECTION
+   ════════════════════════════════════════ */
+const ActiveGroups: React.FC<{ groups: Group[] }> = ({ groups }) => {
+  const { ref, visible } = useScrollReveal();
+
+  return (
+    <section ref={ref} className="py-24 px-6 max-w-7xl mx-auto w-full">
+      <div className={`reveal ${visible ? 'visible' : ''} mb-14`}>
+        <div className="section-label">🚗 Active This Weekend</div>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <h2 className="text-display text-white" style={{ fontSize: 'clamp(32px, 5vw, 52px)' }}>
+            Real Trips.<br />
+            <span className="text-[#14B8A6]">Real People.</span>
+          </h2>
+          <Link
+            to="/groups"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#14B8A6] hover:gap-3 transition-all duration-200 shrink-0"
+          >
+            See All Convoys <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </div>
+
+      {groups.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {groups.map((group, i) => (
+            <GroupCard key={group.id} group={group} index={i} visible={visible} />
+          ))}
+        </div>
+      ) : (
+        <div className={`text-center py-20 reveal ${visible ? 'visible' : ''}`}>
+          <div className="w-16 h-16 rounded-2xl bg-[#0D9488]/10 border border-[#0D9488]/20 flex items-center justify-center mx-auto mb-4">
+            <Users className="w-8 h-8 text-[#0D9488]" />
+          </div>
+          <p className="text-[#64748B] mb-4">No convoys planned yet.</p>
+          <Link to="/groups" className="btn-teal">
+            Be the First to Organize One
+            <ChevronRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
+    </section>
+  );
+};
+
+/* ════════════════════════════════════════
+   HOW IT WORKS
+   ════════════════════════════════════════ */
+const HowItWorks: React.FC = () => {
+  const { ref, visible } = useScrollReveal();
+
+  const steps = [
+    { icon: '🔍', title: 'Discover', desc: 'Browse 200+ admin-verified hidden spots and weekend getaways near you.' },
+    { icon: '👥', title: 'Connect', desc: 'Find a convoy or create your own. Private, safe, and student-verified.' },
+    { icon: '🗺️', title: 'Explore', desc: 'Go together, share your story, and add to the community.' },
+  ];
+
+  return (
+    <section ref={ref} className="py-24 border-y border-[rgba(255,255,255,0.06)]">
+      <div className="max-w-5xl mx-auto px-6 text-center">
+        <div className={`reveal ${visible ? 'visible' : ''}`}>
+          <div className="section-label justify-center">The Process</div>
+          <h2 className="text-display text-white mt-4 mb-16" style={{ fontSize: 'clamp(32px, 5vw, 52px)' }}>
+            Simple. Safe. <span className="text-gradient-amber">Unforgettable.</span>
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 relative">
+          {/* Connector line */}
+          <div className="hidden sm:block absolute top-10 left-[20%] right-[20%] h-px bg-gradient-to-r from-transparent via-[rgba(245,158,11,0.20)] to-transparent" />
+
+          {steps.map((step, i) => (
+            <div
+              key={step.title}
+              className={`reveal ${visible ? 'visible' : ''} flex flex-col items-center`}
+              style={{ transitionDelay: `${i * 120}ms` }}
+            >
+              <div className="w-20 h-20 rounded-2xl bg-[#141820] border border-[rgba(255,255,255,0.08)] flex items-center justify-center mb-6 text-4xl card-shadow">
+                {step.icon}
+              </div>
+              <h3 className="text-heading text-white text-xl mb-3">{step.title}</h3>
+              <p className="text-[#64748B] text-sm leading-relaxed max-w-xs">{step.desc}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className={`mt-16 reveal ${visible ? 'visible' : ''}`} style={{ transitionDelay: '360ms' }}>
+          <Link to="/explore" className="btn-primary px-10 py-4">
+            Start Exploring Now
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+/* ════════════════════════════════════════
+   WESTERN GHATS INTERLUDE
+   A full-width photo moment — one image, one feeling
+   ════════════════════════════════════════ */
+const GhatsInterlude: React.FC = () => {
+  const { ref, visible } = useScrollReveal();
+
+  return (
+    <section ref={ref} className="relative w-full h-[50vh] sm:h-[60vh] overflow-hidden">
+      <img
+        src={GHATS_IMAGE}
+        alt="Monsoon road through the Western Ghats"
+        className={`w-full h-full object-cover object-center transition-all duration-[1200ms] ${visible ? 'scale-100 brightness-75' : 'scale-105 brightness-50'}`}
+        loading="lazy"
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0C0E10] via-transparent to-[#0C0E10]" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <p
+          className={`text-display text-center text-white px-6 transition-all duration-[1000ms] ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
+          style={{ fontSize: 'clamp(24px, 4vw, 48px)', transitionDelay: '300ms' }}
+        >
+          Every great story starts with a<br />
+          <span className="text-gradient-amber">road you've never taken.</span>
+        </p>
+      </div>
+    </section>
+  );
+};
+
+/* ════════════════════════════════════════
+   FOOTER CTA
+   ════════════════════════════════════════ */
+const FooterCta: React.FC = () => {
+  const { ref, visible } = useScrollReveal();
+  return (
+    <section ref={ref} className="py-28 text-center px-6">
+      <div className={`reveal ${visible ? 'visible' : ''}`}>
+        <h2 className="text-display text-white mb-6" style={{ fontSize: 'clamp(36px, 6vw, 72px)' }}>
+          Your Next Weekend<br />
+          <span className="text-gradient-amber">Starts Here.</span>
+        </h2>
+        <p className="text-[#64748B] text-lg mb-10 max-w-lg mx-auto">
+          Join 1,400+ explorers discovering the best of Karnataka, one weekend at a time.
+        </p>
+        <div className="flex flex-wrap gap-4 justify-center">
+          <Link to="/explore" className="btn-primary px-8 py-4 text-sm">
+            Explore Hidden Gems
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+          <Link to="/groups" className="btn-ghost px-8 py-4 text-sm">
+            Find a Convoy
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+/* ════════════════════════════════════════
+   HOME PAGE
+   ════════════════════════════════════════ */
+export const HomePage: React.FC = () => {
+  const [featuredPlaces, setFeaturedPlaces] = useState<Place[]>([]);
+  const [activeGroups, setActiveGroups] = useState<Group[]>([]);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [placesData, groupsData] = await Promise.all([
+          placesApi.getPopularWeekend(),
+          groupsApi.getGroups(),
+        ]);
+        setFeaturedPlaces(placesData || []);
+        setActiveGroups((groupsData || []).slice(0, 3));
+      } catch (err) {
+        console.error('Failed to load home data:', err);
+      }
+    };
+    load();
+  }, []);
+
+  const handleSearch = (q: string) => {
+    if (q.trim()) navigate(`/explore?q=${encodeURIComponent(q.trim())}`);
+  };
+
+  return (
+    <main className="flex flex-col w-full bg-[#0C0E10] text-white min-h-screen">
+      {/* 1. The Opening (Apple-style word reveal) */}
+      <HeroOpening onSearch={handleSearch} />
+
+      {/* 2. Trust strip */}
+      <StatStrip />
+
+      {/* 3. Featured places */}
+      <FeaturedPlaces places={featuredPlaces} />
+
+      {/* 4. Community photo moment */}
+      <CommunitySection />
+
+      {/* 5. Active groups */}
+      <ActiveGroups groups={activeGroups} />
+
+      {/* 6. Western Ghats interlude photo */}
+      <GhatsInterlude />
+
+      {/* 7. How it works */}
+      <HowItWorks />
+
+      {/* 8. Footer CTA */}
+      <FooterCta />
+    </main>
   );
 };

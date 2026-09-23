@@ -1,6 +1,8 @@
 import { MOCK_PLACES } from '../mock/data';
 import { MOCK_GROUPS } from '../mock/groups';
 import type { Place, Group, GroupRequest, Submission, Review, AppNotification } from '../types';
+import { PLACE_CATEGORIES } from '../types';
+export { PLACE_CATEGORIES };
 
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/";
@@ -246,6 +248,7 @@ export const submissionsApi = {
   approveSubmission: async (
     id: number | string,
     data: {
+      category?: string;
       duration: string;
       best_season: string;
       description: string;

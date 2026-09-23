@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  Map, 
+  
   Compass, 
   Users, 
   LogIn, 
@@ -33,11 +33,20 @@ export const Navbar = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [mobileNotifsOpen, setMobileNotifsOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   
   const notificationsRef = useRef<HTMLDivElement>(null);
+
+  // Scroll listener for transparent → glass transition
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 80);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const navLinks = [
     { name: 'Explore', path: '/explore', icon: Compass },
@@ -197,23 +206,26 @@ export const Navbar = () => {
   };
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-gray-200 bg-[#faf9f6]/80 backdrop-blur-md">
+    <nav
+      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
+        isScrolled ? 'navbar-glass' : 'navbar-transparent'
+      }`}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-20">
           
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="bg-[#1a4731] p-1.5 rounded-lg group-hover:bg-[#f97316] transition-colors">
-              <Map className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-serif font-bold text-xl text-[#1a4731]">
-              RoamLocal
-            </span>
+            <img 
+              src="/safarnamma-logo.png" 
+              alt="SafarNamma" 
+              className="h-14 w-auto object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-md" 
+            />
           </Link>
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-8">
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-8">
               {navLinks.map((link) => {
                 const isActive = location.pathname.startsWith(link.path);
                 const Icon = link.icon;
@@ -222,21 +234,21 @@ export const Navbar = () => {
                     key={link.name}
                     to={link.path}
                     className={cn(
-                      "flex items-center gap-2 text-sm font-medium transition-colors hover:text-[#f97316]",
-                      isActive ? "text-[#f97316]" : "text-gray-600"
+                      "flex items-center gap-2 text-xs uppercase tracking-widest font-bold transition-colors hover:text-[#F59E0B]",
+                      isActive ? "text-[#F59E0B]" : "text-gray-300"
                     )}
                   >
-                    <Icon className="w-4 h-4" />
+                    <Icon className="w-3.5 h-3.5" />
                     {link.name}
                   </Link>
                 );
               })}
             </div>
 
-            <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
+            <div className="flex items-center gap-5 border-l border-white/10 pl-6">
               <Link 
                 to="/submit" 
-                className="text-sm font-medium text-[#1a4731] hover:text-[#f97316] transition-colors"
+                className="text-xs uppercase tracking-widest font-bold text-gray-300 hover:text-[#F59E0B] transition-colors"
               >
                 Submit a Place
               </Link>
@@ -255,8 +267,8 @@ export const Navbar = () => {
                       className={cn(
                         "relative p-2 rounded-full transition-all focus:outline-none",
                         isNotificationsOpen 
-                          ? "bg-[#1a4731]/10 text-[#1a4731]" 
-                          : "text-gray-600 hover:text-[#1a4731] hover:bg-gray-100"
+                          ? "bg-[#0D5C63]/10 text-[#0D5C63]" 
+                          : "text-gray-600 hover:text-[#0D5C63] hover:bg-gray-100"
                       )}
                     >
                       <Bell className="w-5 h-5" />
@@ -275,7 +287,7 @@ export const Navbar = () => {
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-gray-900 text-sm">Notifications</span>
                             {unreadCount > 0 && (
-                              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#1a4731]/10 text-[#1a4731]">
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#0D5C63]/10 text-[#0D5C63]">
                                 {unreadCount} new
                               </span>
                             )}
@@ -283,7 +295,7 @@ export const Navbar = () => {
                           {unreadCount > 0 && (
                             <button
                               onClick={handleMarkAllRead}
-                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#1a4731] transition-colors font-medium"
+                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#0D5C63] transition-colors font-medium"
                             >
                               <CheckCheck className="w-3.5 h-3.5" />
                               Mark all read
@@ -355,7 +367,7 @@ export const Navbar = () => {
                                         >
                                           <X className="w-3.5 h-3.5" />
                                         </button>
-                                        <span className="text-[11px] text-[#1a4731] font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                                        <span className="text-[11px] text-[#0D5C63] font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
                                           View <ChevronRight className="w-3 h-3" />
                                         </span>
                                       </div>
@@ -364,7 +376,7 @@ export const Navbar = () => {
 
                                   {/* Unread indicator pip */}
                                   {!notif.is_read && (
-                                    <span className="w-2 h-2 rounded-full bg-[#1a4731] shrink-0 self-center" />
+                                    <span className="w-2 h-2 rounded-full bg-[#0D5C63] shrink-0 self-center" />
                                   )}
                                 </div>
                               );
@@ -396,9 +408,9 @@ export const Navbar = () => {
                         setIsProfileOpen(!isProfileOpen);
                         setIsNotificationsOpen(false);
                       }}
-                      className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-[#1a4731] transition-colors focus:outline-none"
+                      className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-[#0D5C63] transition-colors focus:outline-none"
                     >
-                      <div className="w-9 h-9 rounded-full bg-[#f5f0e6] flex items-center justify-center text-[#1a4731] border-2 border-transparent hover:border-[#1a4731] transition-all overflow-hidden shadow-sm">
+                      <div className="w-9 h-9 rounded-full bg-[#F5F0E6] flex items-center justify-center text-[#0D5C63] border-2 border-transparent hover:border-[#0D5C63] transition-all overflow-hidden shadow-sm">
                         {user?.avatar_url ? (
                           <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
                         ) : (
@@ -417,7 +429,7 @@ export const Navbar = () => {
                         <Link 
                           to="/profile" 
                           onClick={() => setIsProfileOpen(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#1a4731] transition-colors"
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#0D5C63] transition-colors"
                         >
                           <UserIcon className="w-4 h-4" />
                           My Profile
@@ -446,9 +458,9 @@ export const Navbar = () => {
               ) : (
                 <Link 
                   to="/login"
-                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#1a4731] text-white text-sm font-medium hover:bg-[#123523] transition-colors shadow-sm"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-black text-xs uppercase tracking-wider font-bold hover:brightness-110 transition-all shadow-md"
                 >
-                  <LogIn className="w-4 h-4" />
+                  <LogIn className="w-3.5 h-3.5" />
                   Sign In
                 </Link>
               )}
@@ -463,7 +475,7 @@ export const Navbar = () => {
                   setMobileNotifsOpen(!mobileNotifsOpen);
                   setIsMenuOpen(false);
                 }}
-                className="relative p-2 text-gray-600 hover:text-[#1a4731]"
+                className="relative p-2 text-gray-600 hover:text-[#0D5C63]"
               >
                 <Bell className="w-6 h-6" />
                 {unreadCount > 0 && (
@@ -478,7 +490,7 @@ export const Navbar = () => {
                 setIsMenuOpen(!isMenuOpen);
                 setMobileNotifsOpen(false);
               }}
-              className="p-2 text-gray-600 hover:text-[#1a4731]"
+              className="p-2 text-gray-600 hover:text-[#0D5C63]"
             >
               <Menu className="w-6 h-6" />
             </button>
@@ -493,7 +505,7 @@ export const Navbar = () => {
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-900 text-sm">Notifications</span>
               {unreadCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#1a4731]/10 text-[#1a4731]">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0D5C63]/10 text-[#0D5C63]">
                   {unreadCount} unread
                 </span>
               )}
@@ -575,7 +587,7 @@ export const Navbar = () => {
               <Link
                 key={link.name}
                 to={link.path}
-                className="block text-sm font-medium text-gray-700 hover:text-[#f97316]"
+                className="block text-sm font-medium text-gray-700 hover:text-[#F59E0B]"
                 onClick={() => setIsMenuOpen(false)}
               >
                 {link.name}
@@ -583,7 +595,7 @@ export const Navbar = () => {
             ))}
             <Link 
               to="/submit" 
-              className="block text-sm font-medium text-[#1a4731]"
+              className="block text-sm font-medium text-[#0D5C63]"
               onClick={() => setIsMenuOpen(false)}
             >
               Submit a Place
@@ -593,7 +605,7 @@ export const Navbar = () => {
               <>
                 <Link 
                   to="/profile" 
-                  className="block text-sm font-medium text-[#1a4731]"
+                  className="block text-sm font-medium text-[#0D5C63]"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   My Profile
@@ -617,7 +629,7 @@ export const Navbar = () => {
             ) : (
               <Link 
                 to="/login"
-                className="block text-sm font-medium text-[#f97316]"
+                className="block text-sm font-medium text-[#F59E0B]"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Sign In

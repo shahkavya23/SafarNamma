@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { placesApi, submissionsApi } from '../api/client';
 import type { Place } from '../types';
+import { PLACE_CATEGORIES } from '../types';
 import { 
+  List,
   CheckCircle, 
   XCircle, 
   MapPin, 
@@ -48,6 +50,7 @@ export const AdminDashboard = () => {
   // Modal State for Curating Mandatory Metadata Before Approval
   const [selectedForApproval, setSelectedForApproval] = useState<Place | null>(null);
   const [curationForm, setCurationForm] = useState({
+    category: 'Park',
     duration: '2-3 Hours',
     best_season: 'October - March (Winter)',
     description: '',
@@ -98,6 +101,7 @@ export const AdminDashboard = () => {
   const openApprovalModal = (place: Place) => {
     setSelectedForApproval(place);
     setCurationForm({
+      category: place.category || 'Park',
       duration: place.duration || '2-3 Hours',
       best_season: place.best_season || 'October - March (Winter)',
       description: place.description || '',
@@ -218,7 +222,7 @@ export const AdminDashboard = () => {
   };
 
   // Filter approved places
-  const categories = ['All', 'Waterfalls', 'Treks', 'Heritage', 'Lakes', 'Beaches', 'Hill Stations', 'Temples', 'Wildlife', 'Nature'];
+  const categories = ['All', ...PLACE_CATEGORIES];
   
   const filteredApprovedPlaces = approvedPlaces.filter((place) => {
     const matchesSearch = 
@@ -752,6 +756,26 @@ export const AdminDashboard = () => {
                     className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-2 focus:ring-[#1a4731] outline-none"
                   />
                 </div>
+              </div>
+
+              {/* Category Field */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <List className="w-3.5 h-3.5 text-[#1a4731]" />
+                  Category <span className="text-rose-500">*</span>
+                </label>
+                <select 
+                  value={curationForm.category}
+                  onChange={(e) => setCurationForm({ ...curationForm, category: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
+                  required
+                >
+                  {PLACE_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Duration Field */}

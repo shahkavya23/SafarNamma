@@ -4,6 +4,7 @@ import { submissionsApi } from '../api/client';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ImageUploader } from '../components/ImageUploader';
+import { PLACE_CATEGORIES } from '../types';
 
 export const SubmitPlacePage = () => {
   const { user } = useAuth();
@@ -234,17 +235,11 @@ export const SubmitPlacePage = () => {
                     className={`w-full pl-10 pr-4 py-3 rounded-xl border ${errors.category ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all appearance-none bg-transparent`}
                   >
                     <option value="">Select a category</option>
-                    <option value="Viewpoints">Viewpoints & Sunrises</option>
-                    <option value="Waterfalls">Waterfalls</option>
-                    <option value="Treks">Treks & Trails</option>
-                    <option value="Lakes">Lakes & Beaches</option>
-                    <option value="Nature">Nature & Wildlife</option>
-                    <option value="Heritage & Temples">Heritage & Temples</option>
-                    <option value="Cafes">Cafes & Bakeries</option>
-                    <option value="Food & Street Food">Food & Street Food</option>
-                    <option value="Shopping">Shopping & Local Bazaars</option>
-                    <option value="Malls & Entertainment">Malls & Entertainment</option>
-                    <option value="Parks & Gardens">Parks & Botanical Gardens</option>
+                    {PLACE_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 {errors.category && <p className="text-sm text-rose-500 mt-1 flex items-center gap-1"><Info className="w-4 h-4"/> {errors.category}</p>}

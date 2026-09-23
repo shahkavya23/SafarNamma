@@ -18,6 +18,23 @@ class User(Base):
 
 
 
+# Allowed destination categories
+VALID_CATEGORIES = [
+    "Park",
+    "Game Zone",
+    "Monuments",
+    "Museums",
+    "Adventure",
+    "Cafe",
+    "Mall",
+    "Entertainment",
+    "Shopping",
+    "Famous Streets",
+    "Religious Places",
+    "Lakes",
+    "Treks"
+]
+
 class Destination(Base):
 
     __tablename__ = "destinations"

@@ -197,7 +197,7 @@ export const PlaceDetailsPage = () => {
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Place Not Found</h1>
         <p className="text-gray-500 mb-8">We couldn't find the destination you're looking for.</p>
-        <Link to="/explore" className="bg-[#1a4731] text-white px-6 py-3 rounded-full font-medium hover:bg-[#123523] transition-colors">
+        <Link to="/explore" className="bg-[#0D5C63] text-white px-6 py-3 rounded-full font-medium hover:bg-[#0A3F47] transition-colors">
           Back to Explore
         </Link>
       </div>
@@ -208,7 +208,7 @@ export const PlaceDetailsPage = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
       {/* Breadcrumbs */}
       <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-        <Link to="/explore" className="hover:text-[#f97316]">Explore</Link>
+        <Link to="/explore" className="hover:text-[#F59E0B]">Explore</Link>
         <span>/</span>
         <span className="text-gray-900 font-medium">{place.name}</span>
       </div>
@@ -258,7 +258,7 @@ export const PlaceDetailsPage = () => {
         <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end z-10 pointer-events-auto">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="bg-[#f97316] text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">
+              <span className="bg-[#F59E0B] text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">
                 {place.category}
               </span>
               {place.is_hidden_gem && (
@@ -269,19 +269,19 @@ export const PlaceDetailsPage = () => {
             </div>
             <h1 className="text-3xl md:text-5xl font-serif font-bold text-white mb-2 drop-shadow-sm">{place.name}</h1>
             <p className="text-white/90 flex items-center gap-2 text-sm md:text-base">
-              <MapPin className="w-4 h-4" /> {place.state || 'India'}
+              <MapPin className="w-4 h-4 text-[#F59E0B]" /> {place.state || 'India'}
             </p>
           </div>
           <div className="hidden sm:flex gap-3">
             <button 
               onClick={handleSaveToggle}
-              className={`backdrop-blur-md p-3 rounded-full border transition-colors ${isSaved ? 'bg-white text-[#f97316] border-white shadow-md' : 'bg-white/20 hover:bg-white/30 text-white border-white/40'}`}
+              className={`backdrop-blur-md p-3 rounded-full border transition-colors ${isSaved ? 'bg-white text-[#F59E0B] border-white shadow-md' : 'bg-white/20 hover:bg-white/30 text-white border-white/40'}`}
               title={isSaved ? "Remove from favorites" : "Save to favorites"}
             >
               <Bookmark className="w-5 h-5" fill={isSaved ? "currentColor" : "none"} />
             </button>
             {place.map_link && (
-              <a href = {place.map_link}  target = "_blank" rel = "noopener noreferrer" className="bg-white text-[#1a4731] px-6 py-3 rounded-full font-bold hover:bg-gray-100 transition-colors flex items-center gap-2 shadow-lg">
+              <a href = {place.map_link}  target = "_blank" rel = "noopener noreferrer" className="bg-white text-[#0D5C63] px-6 py-3 rounded-full font-bold hover:bg-gray-100 transition-colors flex items-center gap-2 shadow-lg">
                 <Navigation className="w-4 h-4" /> Get Directions
               </a>
             )}
@@ -299,7 +299,7 @@ export const PlaceDetailsPage = () => {
               onClick={() => setSelectedImageIndex(idx)}
               className={`relative shrink-0 w-24 h-16 md:w-28 md:h-18 rounded-2xl overflow-hidden border-2 transition-all duration-200 shadow-sm ${
                 selectedImageIndex === idx
-                  ? 'border-[#f97316] ring-2 ring-[#f97316]/30 scale-105 shadow-md'
+                  ? 'border-[#F59E0B] ring-2 ring-[#F59E0B]/30 scale-105 shadow-md'
                   : 'border-transparent opacity-70 hover:opacity-100 hover:border-gray-300'
               }`}
             >
@@ -309,7 +309,7 @@ export const PlaceDetailsPage = () => {
                 className="w-full h-full object-cover"
               />
               {selectedImageIndex === idx && (
-                <div className="absolute inset-0 bg-[#f97316]/10" />
+                <div className="absolute inset-0 bg-[#F59E0B]/10" />
               )}
             </button>
           ))}
@@ -320,7 +320,7 @@ export const PlaceDetailsPage = () => {
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-10">
           <section>
-            <h2 className="text-2xl font-serif font-bold text-[#1a4731] mb-4">About this place</h2>
+            <h2 className="text-2xl font-serif font-bold text-[#0D5C63] mb-4">About this place</h2>
             <p className="text-gray-700 leading-relaxed whitespace-pre-line text-lg">
               {place.description}
             </p>
@@ -328,20 +328,20 @@ export const PlaceDetailsPage = () => {
 
           {/* Quick Facts Grid */}
           <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-[#faf9f6] p-4 rounded-2xl border border-gray-100">
-              <Clock className="w-6 h-6 text-[#1a4731] mb-2" />
+            <div className="bg-[#FAF9F6] p-4 rounded-2xl border border-gray-100">
+              <Clock className="w-6 h-6 text-[#0D5C63] mb-2" />
               <p className="text-xs text-gray-500 uppercase font-semibold tracking-wider">Duration</p>
               <p className="font-medium text-gray-900">{place.duration}</p>
             </div>
-            <div className="bg-[#faf9f6] p-4 rounded-2xl border border-gray-100">
-              <IndianRupee className="w-6 h-6 text-[#1a4731] mb-2" />
+            <div className="bg-[#FAF9F6] p-4 rounded-2xl border border-gray-100">
+              <IndianRupee className="w-6 h-6 text-[#0D5C63] mb-2" />
               <p className="text-xs text-gray-500 uppercase font-semibold tracking-wider">Budget Tier</p>
-              <p className="font-medium text-gray-900">{place.budget_tier}</p>
+              <p className="font-medium text-gray-900">{place.budget_tier ? `₹${place.budget_tier}` : 'Free'}</p>
             </div>
-            <div className="bg-[#faf9f6] p-4 rounded-2xl border border-gray-100">
-              <Calendar className="w-6 h-6 text-[#1a4731] mb-2" />
+            <div className="bg-[#FAF9F6] p-4 rounded-2xl border border-gray-100">
+              <Calendar className="w-6 h-6 text-[#0D5C63] mb-2" />
               <p className="text-xs text-gray-500 uppercase font-semibold tracking-wider">Best Season</p>
-              <p className="font-medium text-gray-900">{place.best_season}</p>
+              <p className="font-medium text-gray-900">{place.best_season || 'All Year'}</p>
             </div>
           </section>
 
@@ -360,7 +360,7 @@ export const PlaceDetailsPage = () => {
           <section className="border-t border-gray-100 pt-8 mt-10">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-2xl font-serif font-bold text-[#1a4731] flex items-center gap-2">
+                <h3 className="text-2xl font-serif font-bold text-[#0D5C63] flex items-center gap-2">
                   <Star className="w-6 h-6 text-amber-500 fill-amber-500" />
                   Community Reviews
                 </h3>
@@ -373,7 +373,7 @@ export const PlaceDetailsPage = () => {
             </div>
 
             {/* Write a Review Form Box */}
-            <div className="bg-[#faf9f6] p-6 rounded-2xl border border-gray-100 mb-8">
+            <div className="bg-[#FAF9F6] p-6 rounded-2xl border border-gray-100 mb-8">
               <h4 className="font-bold text-gray-900 mb-1">Leave a Review</h4>
               <p className="text-xs text-gray-500 mb-4">
                 Share your tips, experiences, or recommendations for fellow travelers.
@@ -436,7 +436,7 @@ export const PlaceDetailsPage = () => {
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder="What did you love? Any tips on parking, timing, or scenic viewpoints?"
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all"
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0D5C63] focus:border-transparent transition-all"
                   />
                 </div>
 
@@ -445,7 +445,7 @@ export const PlaceDetailsPage = () => {
                   <button
                     type="submit"
                     disabled={isSubmittingReview}
-                    className="bg-[#1a4731] text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#123523] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex items-center gap-2"
+                    className="bg-[#0D5C63] text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#0A3F47] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex items-center gap-2"
                   >
                     {isSubmittingReview ? (
                       <>
@@ -467,7 +467,7 @@ export const PlaceDetailsPage = () => {
                 <div className="h-24 bg-gray-100 rounded-2xl w-full"></div>
               </div>
             ) : reviews.length === 0 ? (
-              <div className="bg-[#faf9f6] p-8 rounded-2xl border border-gray-100 text-center">
+              <div className="bg-[#FAF9F6] p-8 rounded-2xl border border-gray-100 text-center">
                 <MessageSquare className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                 <p className="font-semibold text-gray-800">Be the first to share your experience!</p>
                 <p className="text-sm text-gray-500 mt-1">
@@ -483,7 +483,7 @@ export const PlaceDetailsPage = () => {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-[#1a4731]/10 text-[#1a4731] font-bold text-xs flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-[#0D5C63]/10 text-[#0D5C63] font-bold text-xs flex items-center justify-center">
                           T{rev.user_id}
                         </div>
                         <span className="font-semibold text-gray-900 text-sm">
@@ -569,7 +569,7 @@ export const PlaceDetailsPage = () => {
             <div className="mt-8 pt-6 border-t border-gray-100">
               <button 
                 onClick={() => navigate(`/groups?destinationId=${place.id}`)}
-                className="w-full bg-[#f97316] text-white py-3.5 rounded-xl font-bold hover:bg-[#ea580c] transition-all shadow-md hover:shadow-orange-200 flex items-center justify-center gap-2 group"
+                className="w-full bg-[#F59E0B] text-white py-3.5 rounded-xl font-bold hover:bg-[#D97706] transition-all shadow-md hover:shadow-amber-200 flex items-center justify-center gap-2 group"
               >
                 <Users className="w-5 h-5 group-hover:scale-110 transition-transform" />
                 <span>I want to go (Find Travel Groups)</span>
@@ -577,7 +577,7 @@ export const PlaceDetailsPage = () => {
               <div className="flex gap-2 mt-3">
                 <button 
                   onClick={handleSaveToggle}
-                  className={`flex-1 border py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 ${isSaved ? 'bg-[#fff5ef] border-[#f97316]/30 text-[#f97316]' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                  className={`flex-1 border py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 ${isSaved ? 'bg-[#FFFBEB] border-[#F59E0B]/30 text-[#F59E0B]' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                 >
                   <Bookmark className="w-4 h-4" fill={isSaved ? "currentColor" : "none"} /> 
                   {isSaved ? 'Saved' : 'Save'}
@@ -602,11 +602,11 @@ export const PlaceDetailsPage = () => {
             </div>
           </div>
 
-          <div className="bg-[#f5f0e6] p-5 rounded-2xl text-sm">
+          <div className="bg-[#FAF9F6] p-5 rounded-2xl text-sm border border-gray-100">
             <p className="text-gray-600 mb-2">
               Source: <span className="font-medium">Community Submitted</span>
             </p>
-            <button className="text-xs text-[#1a4731] font-medium mt-3 flex items-center gap-1 hover:underline">
+            <button className="text-xs text-[#0D5C63] font-medium mt-3 flex items-center gap-1 hover:underline">
               <ExternalLink className="w-3 h-3" /> Report incorrect info
             </button>
           </div>
