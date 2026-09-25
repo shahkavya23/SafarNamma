@@ -82,13 +82,15 @@
 /* ── Page gutter ──
    One fluid side margin for every page container, so content breathes on
    13–15" laptops (and Windows display scaling) instead of hugging the edges.
-   20px on phones → ~4.5vw on laptops → capped at 64px on big monitors. */
+   20px on phones → ~4.5vw on laptops → capped at 64px on big monitors.
+   Never narrower than the notch / curved-edge safe area. */
 :root {
   --page-gutter: clamp(1.25rem, 4.5vw, 4rem);
 }
 
 @utility px-page {
-  padding-inline: var(--page-gutter);
+  padding-left: max(var(--page-gutter), env(safe-area-inset-left));
+  padding-right: max(var(--page-gutter), env(safe-area-inset-right));
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -115,6 +117,12 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
+  }
+  /* Chrome on Android widens and zooms out the whole page when anything pokes
+     past the edge (Samsung Internet doesn't), which throws the side margins off.
+     clip stops that on both roots without breaking position: sticky. */
+  @supports (overflow: clip) {
+    html, body { overflow-x: clip; }
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -534,6 +542,32 @@
     transition: opacity 0.9s var(--ease-out-expo), transform 0.9s var(--ease-out-expo);
   }
   .reveal.visible { opacity: 1; transform: none; }
+}
+
+/* ── Small phones ──
+   Tailwind's first breakpoint is 640px, so every phone got the layout tuned for
+   ~412px Samsungs. Most Redmi/Poco/Realme phones in Chrome are 360–393px wide. */
+@media (max-width: 400px) {
+  :root { --page-gutter: 1rem; }
+
+  /* Same layer as the components, so per-element classes (px-4, text-xs…) still win */
+  @layer utilities {
+    .btn-primary, .btn-ghost, .btn-teal, .btn-accent { padding: 0.75rem 1.2rem; font-size: 0.85rem; }
+    .chip  { padding: 0.5rem 0.85rem; font-size: 0.78rem; }
+    .badge { font-size: 0.64rem; letter-spacing: 0.04em; }
+    .card  { border-radius: 18px; }
+  }
+
+  @layer base {
+    /* Long place names wrap instead of pushing the page wider */
+    h1, h2, h3 { overflow-wrap: break-word; }
+  }
+}
+
+/* Tiny screens, or a phone set to "large display size" */
+@media (max-width: 360px) {
+  html { font-size: 93.75%; }
+  :root { --page-gutter: 0.875rem; }
 }
 
 /* ── Reduced motion: everything visible, nothing moves ── */
