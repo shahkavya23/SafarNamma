@@ -372,14 +372,19 @@ def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(
             detail="Either an existing destination or a custom multi-stop route must be provided."
         )
 
-    # Strict WhatsApp / Telegram invite link security check
-    if group.chat_link and group.chat_link.strip():
-        valid_chat_regex = r"^https?://(chat\.whatsapp\.com/[A-Za-z0-9_-]+|wa\.me/[0-9]+|t\.me/[A-Za-z0-9_+-]+|telegram\.me/[A-Za-z0-9_+-]+)"
-        if not re.match(valid_chat_regex, group.chat_link.strip(), re.IGNORECASE):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Security validation failed: Chat link must be a legitimate WhatsApp (chat.whatsapp.com) or Telegram (t.me) invite link."
-            )
+    # Every trip needs a group chat, and it must be a real WhatsApp / Telegram invite link
+    if not group.chat_link or not group.chat_link.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A WhatsApp or Telegram group link is required to create a trip."
+        )
+    group.chat_link = group.chat_link.strip()
+    valid_chat_regex = r"^https?://(chat\.whatsapp\.com/[A-Za-z0-9_-]+|wa\.me/[0-9]+|t\.me/[A-Za-z0-9_+-]+|telegram\.me/[A-Za-z0-9_+-]+)"
+    if not re.match(valid_chat_regex, group.chat_link, re.IGNORECASE):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Security validation failed: Chat link must be a legitimate WhatsApp (chat.whatsapp.com) or Telegram (t.me) invite link."
+        )
 
     # Rate limit: An organizer can create a maximum of 2 groups per day
     start_of_today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -752,6 +757,12 @@ def get_pending_submissions(db: Session = Depends(get_db), _admin: CurrentUser =
     return db.query(models.Destination).filter(models.Destination.submission_status == "pending").all()
 
 
+# Curate & Approve requirements (the admin form in AdminDashboard.tsx uses the same numbers)
+MIN_GALLERY_PHOTOS = 3
+MAX_GALLERY_PHOTOS = 5
+MIN_DESCRIPTION_CHARS = 50
+
+
 @app.put("/api/admin/submissions/{destination_id}/approve")
 def approve_submission(destination_id: int, payload: schemas.AdminApprovalPayload, db: Session = Depends(get_db), _admin: CurrentUser = Depends(require_admin)):
     """Approves a community submission and enriches it with mandatory curated metadata."""
@@ -769,15 +780,40 @@ def approve_submission(destination_id: int, payload: schemas.AdminApprovalPayloa
         )
     dest.image_url = effective_image_url
 
-    if payload.gallery_images is not None:
-        dest.gallery_images = json.dumps(payload.gallery_images) if payload.gallery_images else None
+    # Everything in Curate & Approve is mandatory (same rules as the admin form)
+    category = (payload.category or dest.category or "").strip()
+    gallery = [u.strip() for u in (payload.gallery_images or []) if u and u.strip() and u.strip() != effective_image_url]
+    menu = [u.strip() for u in (payload.menu_images or []) if u and u.strip()]
+    missing = []
+    if not category:
+        missing.append("a category")
+    if not (MIN_GALLERY_PHOTOS <= len(gallery) <= MAX_GALLERY_PHOTOS):
+        missing.append(f"{MIN_GALLERY_PHOTOS} to {MAX_GALLERY_PHOTOS} gallery photos besides the cover ({len(gallery)} given)")
+    if category == "Cafes & Restaurants" and not menu:
+        missing.append("at least 1 menu photo")
+    for label, value in (
+        ("duration", payload.duration),
+        ("best season", payload.best_season),
+        ("opening time", payload.opening_hours),
+        ("closing time", payload.closing_hours),
+        ("transport options", payload.transport_options),
+        ("nearby facilities", payload.nearby_facilities),
+    ):
+        if not value or not value.strip():
+            missing.append(label)
+    if len((payload.description or "").strip()) < MIN_DESCRIPTION_CHARS:
+        missing.append(f"a description of at least {MIN_DESCRIPTION_CHARS} characters")
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Can't approve yet. Missing: " + "; ".join(missing) + ".",
+        )
 
-    if payload.menu_images is not None:
-        dest.menu_images = json.dumps(payload.menu_images) if payload.menu_images else None
+    dest.gallery_images = json.dumps(gallery)
+    dest.menu_images = json.dumps(menu) if category == "Cafes & Restaurants" and menu else None
 
     # Save the mandatory metadata and editorial description provided by the admin
-    if payload.category:
-        dest.category = payload.category
+    dest.category = category
     dest.duration = payload.duration
     dest.best_season = payload.best_season
     dest.description = payload.description

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { placesApi, submissionsApi } from '../api/client';
 import type { Place } from '../types';
 import { PLACE_CATEGORIES } from '../types';
@@ -32,6 +32,11 @@ import { Link } from 'react-router-dom';
 import { hoursMarker, hoursMode } from '../utils/hours';
 import { HoursModeToggles } from '../components/ui/Open247Toggle';
 
+// Curate & Approve requirements (same numbers as the backend's approve_submission)
+const MIN_GALLERY = 3;
+const MAX_GALLERY = 5;
+const MIN_DESCRIPTION = 50;
+
 export const AdminDashboard = () => {
   // Navigation Tab: 'submissions' | 'weekend'
   const [activeTab, setActiveTab] = useState<'submissions' | 'weekend'>('submissions');
@@ -53,20 +58,25 @@ export const AdminDashboard = () => {
 
   // Modal State for Curating Mandatory Metadata Before Approval
   const [selectedForApproval, setSelectedForApproval] = useState<Place | null>(null);
+  // No pre-filled answers: every field starts empty (or with what the traveller submitted),
+  // so the admin has to actually fill it in before the place can go live
   const [curationForm, setCurationForm] = useState({
-    category: 'Nature',
-    duration: '2-3 Hours',
-    best_season: 'All Year Round',
+    category: '',
+    duration: '',
+    best_season: '',
     description: '',
-    opening_hours: '09:00',
-    closing_hours: '21:00',
-    transport_options: 'Local cabs and buses available',
-    nearby_facilities: 'Basic eateries, Restrooms',
+    opening_hours: '',
+    closing_hours: '',
+    transport_options: '',
+    nearby_facilities: '',
     image_url: '',
     gallery_images: [] as string[],
     menu_images: [] as string[]
   });
   const [isPublishing, setIsPublishing] = useState(false);
+  const [showCurationErrors, setShowCurationErrors] = useState(false);
+  const [curationError, setCurationError] = useState<string | null>(null);
+  const curationErrorsRef = useRef<HTMLDivElement>(null);
 
   // Fetch pending submissions
   const fetchSubmissions = async () => {
@@ -113,61 +123,75 @@ export const AdminDashboard = () => {
   const openApprovalModal = (place: Place) => {
     setSelectedForApproval(place);
     setCurationForm({
-      category: place.category || 'Nature',
-      duration: place.duration || '2-3 Hours',
-      best_season: place.best_season || 'All Year Round',
+      category: place.category || '',
+      duration: place.duration || '',
+      best_season: place.best_season || '',
       description: place.description || '',
-      opening_hours: place.opening_hours || '09:00',
-      closing_hours: place.closing_hours || '21:00',
-      transport_options: place.transport_options || 'Local cabs and buses available',
-      nearby_facilities: place.nearby_facilities || 'Basic eateries, Restrooms',
+      opening_hours: place.opening_hours || '',
+      closing_hours: place.closing_hours || '',
+      transport_options: place.transport_options || '',
+      nearby_facilities: place.nearby_facilities || '',
       image_url: place.image_url || '',
       gallery_images: place.gallery_images || [],
       menu_images: place.menu_images || []
     });
+    setShowCurationErrors(false);
+    setCurationError(null);
   };
+
+  // Everything in Curate & Approve is mandatory. Mirrors the backend check in approve_submission.
+  const isCafe = curationForm.category === 'Cafes & Restaurants';
+  const galleryCount = curationForm.gallery_images.filter((u) => u && u.trim() && u !== curationForm.image_url).length;
+  const curationIssues: { key: string; label: string }[] = [
+    !curationForm.image_url.trim() && { key: 'cover', label: 'Add a cover photo' },
+    (galleryCount < MIN_GALLERY || galleryCount > MAX_GALLERY) && {
+      key: 'gallery',
+      label: `Add ${MIN_GALLERY} to ${MAX_GALLERY} gallery photos besides the cover (${galleryCount} added)`,
+    },
+    isCafe && curationForm.menu_images.length === 0 && { key: 'menu', label: 'Add at least 1 menu photo for a café or restaurant' },
+    !curationForm.category && { key: 'category', label: 'Choose a category' },
+    !curationForm.duration && { key: 'duration', label: 'Choose how long a visit takes' },
+    !curationForm.best_season && { key: 'best_season', label: 'Choose the best season' },
+    (!curationForm.opening_hours.trim() || !curationForm.closing_hours.trim()) && { key: 'hours', label: 'Set opening and closing times' },
+    curationForm.transport_options.trim().length < 3 && { key: 'transport', label: 'Describe how to get there' },
+    curationForm.nearby_facilities.trim().length < 3 && { key: 'facilities', label: 'List nearby facilities' },
+    curationForm.description.trim().length < MIN_DESCRIPTION && {
+      key: 'description',
+      label: `Write a description of at least ${MIN_DESCRIPTION} characters (${curationForm.description.trim().length} so far)`,
+    },
+  ].filter(Boolean) as { key: string; label: string }[];
+  const hasIssue = (key: string) => showCurationErrors && curationIssues.some((i) => i.key === key);
+  const errorRing = (key: string) => (hasIssue(key) ? '!border-rose-400 !bg-rose-50' : '');
 
   // Submit enriched metadata and approve
   const handleConfirmApproval = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedForApproval) return;
+    setCurationError(null);
 
-    if (!curationForm.image_url || !curationForm.image_url.trim()) {
-      alert("A cover image is mandatory before approving this place! The user did not upload an image, so you must upload or insert one.");
-      return;
-    }
-
-    if (!curationForm.duration.trim() || !curationForm.best_season.trim()) {
-      alert("Duration and Best Season are mandatory!");
-      return;
-    }
-
-    if (!curationForm.opening_hours.trim() || !curationForm.closing_hours.trim() || !curationForm.transport_options.trim() || !curationForm.nearby_facilities.trim()) {
-      alert("Opening Time, Closing Time, Transport Options, and Nearby Facilities are compulsory for Admin curation!");
-      return;
-    }
-
-    if (!curationForm.description.trim() || curationForm.description.trim().length < 10) {
-      alert("Description is mandatory! Please review and enter at least 10 characters describing this destination.");
+    if (curationIssues.length > 0) {
+      setShowCurationErrors(true);
+      requestAnimationFrame(() => curationErrorsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
       return;
     }
 
     setIsPublishing(true);
     try {
-      const success = await submissionsApi.approveSubmission(selectedForApproval.id, curationForm);
-      if (success) {
-        setSubmissions(prev => prev.filter(sub => sub.id !== selectedForApproval.id));
-        setActionMessage(`"${selectedForApproval.name}" successfully curated, approved, and published to Explore!`);
-        setSelectedForApproval(null);
-        // Refresh approved places so new destination appears in the weekend showcase list
-        fetchApprovedPlaces();
-        setTimeout(() => setActionMessage(null), 5000);
-      } else {
-        alert("Failed to approve submission.");
-      }
+      await submissionsApi.approveSubmission(selectedForApproval.id, {
+        ...curationForm,
+        gallery_images: curationForm.gallery_images.filter((u) => u && u !== curationForm.image_url),
+        menu_images: isCafe ? curationForm.menu_images : [],
+      });
+      setSubmissions(prev => prev.filter(sub => sub.id !== selectedForApproval.id));
+      setActionMessage(`"${selectedForApproval.name}" successfully curated, approved, and published to Explore!`);
+      setSelectedForApproval(null);
+      // Refresh approved places so new destination appears in the weekend showcase list
+      fetchApprovedPlaces();
+      setTimeout(() => setActionMessage(null), 5000);
     } catch (error) {
       console.error("Error publishing submission:", error);
-      alert("Failed to approve submission.");
+      setCurationError(error instanceof Error ? error.message : 'Failed to approve submission.');
+      requestAnimationFrame(() => curationErrorsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     } finally {
       setIsPublishing(false);
     }
@@ -718,9 +742,9 @@ export const AdminDashboard = () => {
               Complete the missing Quick Facts and verify description for <span className="font-semibold text-gray-800">{selectedForApproval.name}</span> before publishing to Explore.
             </p>
 
-            <form onSubmit={handleConfirmApproval} className="space-y-5">
+            <form onSubmit={handleConfirmApproval} noValidate className="space-y-5">
               {/* Mandatory Image Curation & Verification Section */}
-              <div className="p-4 rounded-2xl border bg-gray-50/70 border-gray-200 space-y-3">
+              <div className={`p-4 rounded-2xl border bg-gray-50/70 border-gray-200 space-y-3 ${hasIssue('cover') || hasIssue('gallery') || hasIssue('menu') ? '!border-rose-400 !bg-rose-50/60' : ''}`}>
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
                     <ImageIcon className="w-4 h-4 text-[#1a4731]" />
@@ -753,8 +777,12 @@ export const AdminDashboard = () => {
                   onCoverChange={(url) => setCurationForm((prev) => ({ ...prev, image_url: url }))}
                   galleryUrls={curationForm.gallery_images}
                   onGalleryChange={(urls) => setCurationForm((prev) => ({ ...prev, gallery_images: urls }))}
-                  maxGalleryPhotos={5}
+                  maxGalleryPhotos={MAX_GALLERY}
                 />
+                <p className={`text-[11px] font-semibold ${galleryCount >= MIN_GALLERY ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  Required: 1 cover photo + {MIN_GALLERY} to {MAX_GALLERY} gallery photos ({galleryCount} added)
+                  {isCafe && ' + at least 1 menu photo'}
+                </p>
 
                 {curationForm.category === 'Cafes & Restaurants' && (
                   <div className="pt-3 border-t border-gray-200">
@@ -790,9 +818,10 @@ export const AdminDashboard = () => {
                 <select 
                   value={curationForm.category}
                   onChange={(e) => setCurationForm({ ...curationForm, category: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
+                  className={`w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none ${errorRing('category')}`}
                   required
                 >
+                  <option value="" disabled>Select a category…</option>
                   {PLACE_CATEGORIES.map((cat) => (
                     <option key={cat} value={cat}>
                       {cat}
@@ -810,9 +839,10 @@ export const AdminDashboard = () => {
                 <select 
                   value={curationForm.duration}
                   onChange={(e) => setCurationForm({ ...curationForm, duration: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
+                  className={`w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none ${errorRing('duration')}`}
                   required
                 >
+                  <option value="" disabled>Select a duration…</option>
                   <option value="1-2 Hours">1-2 Hours (Quick Stop)</option>
                   <option value="2-3 Hours">2-3 Hours (Standard Visit)</option>
                   <option value="Half Day (4-5 Hours)">Half Day (4-5 Hours)</option>
@@ -830,9 +860,10 @@ export const AdminDashboard = () => {
                 <select 
                   value={curationForm.best_season}
                   onChange={(e) => setCurationForm({ ...curationForm, best_season: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
+                  className={`w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none ${errorRing('best_season')}`}
                   required
                 >
+                  <option value="" disabled>Select the best season…</option>
                   <option value="October - March (Winter)">October - March (Winter / Pleasant)</option>
                   <option value="July - September (Monsoon)">July - September (Monsoon / Lush Green)</option>
                   <option value="March - May (Summer)">March - May (Summer / Clear Skies)</option>
@@ -851,8 +882,8 @@ export const AdminDashboard = () => {
                     onChange={(m) =>
                       setCurationForm({
                         ...curationForm,
-                        opening_hours: m === 'times' ? '09:00' : hoursMarker(m),
-                        closing_hours: m === 'times' ? '21:00' : hoursMarker(m),
+                        opening_hours: m === 'times' ? '' : hoursMarker(m),
+                        closing_hours: m === 'times' ? '' : hoursMarker(m),
                       })
                     }
                   />
@@ -870,7 +901,7 @@ export const AdminDashboard = () => {
                           type="time"
                           value={curationForm.opening_hours}
                           onChange={(e) => setCurationForm({ ...curationForm, opening_hours: e.target.value })}
-                          className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
+                          className={`w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none ${errorRing('hours')}`}
                           required
                         />
                       </div>
@@ -883,7 +914,7 @@ export const AdminDashboard = () => {
                           type="time"
                           value={curationForm.closing_hours}
                           onChange={(e) => setCurationForm({ ...curationForm, closing_hours: e.target.value })}
-                          className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
+                          className={`w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none ${errorRing('hours')}`}
                           required
                         />
                       </div>
@@ -899,7 +930,7 @@ export const AdminDashboard = () => {
                       type="text"
                       value={curationForm.transport_options}
                       onChange={(e) => setCurationForm({ ...curationForm, transport_options: e.target.value })}
-                      className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
+                      className={`w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none ${errorRing('transport')}`}
                       placeholder="e.g. Local cabs and buses available, Metro station 2km away"
                       required
                     />
@@ -914,7 +945,7 @@ export const AdminDashboard = () => {
                       type="text"
                       value={curationForm.nearby_facilities}
                       onChange={(e) => setCurationForm({ ...curationForm, nearby_facilities: e.target.value })}
-                      className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
+                      className={`w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none ${errorRing('facilities')}`}
                       placeholder="Comma-separated: Basic eateries, Restrooms, Parking"
                       required
                     />
@@ -938,13 +969,34 @@ export const AdminDashboard = () => {
                   rows={4}
                   value={curationForm.description}
                   onChange={(e) => setCurationForm({ ...curationForm, description: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none leading-relaxed"
+                  className={`w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none leading-relaxed ${errorRing('description')}`}
                   placeholder="Review or write the description for this destination. What makes it special? Any essential travel tips?"
                   required
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  Check for clarity and accuracy. If the user left it blank, write an informative description.
+                  At least {MIN_DESCRIPTION} characters ({curationForm.description.trim().length} so far). Check for clarity and accuracy. If the user left it blank, write an informative description.
                 </p>
+              </div>
+
+              {/* What's still missing — shown after a publish attempt, or when the server refuses */}
+              <div ref={curationErrorsRef}>
+                {showCurationErrors && curationIssues.length > 0 && (
+                  <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-sm text-rose-800" role="alert">
+                    <p className="font-bold flex items-center gap-1.5 mb-2">
+                      <AlertTriangle className="w-4 h-4" /> Can't publish yet. {curationIssues.length} {curationIssues.length === 1 ? 'thing is' : 'things are'} missing:
+                    </p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      {curationIssues.map((i) => (
+                        <li key={i.key}>{i.label}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {curationError && (
+                  <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-sm text-rose-800 flex items-start gap-2" role="alert">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {curationError}
+                  </div>
+                )}
               </div>
 
               {/* Modal Buttons */}

@@ -319,19 +319,19 @@ export const submissionsApi = {
       menu_images?: string[];
     }
   ): Promise<boolean> => {
-    try {
-      const response = await apiFetch(`${BASE_URL}api/admin/submissions/${id}/approve`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      });
-      return response.ok;
-    } catch (error) {
-      console.error("Failed to approve submission:", error);
-      return false;
+    const response = await apiFetch(`${BASE_URL}api/admin/submissions/${id}/approve`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    // Surface the backend's reason (missing photos, empty fields…) instead of a generic failure
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(body.detail, 'Failed to approve submission.'));
     }
+    return true;
   },
 
   rejectSubmission: async (id: number | string): Promise<boolean> => {

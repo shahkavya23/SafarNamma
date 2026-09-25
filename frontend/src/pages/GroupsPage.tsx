@@ -107,6 +107,9 @@ const tomorrowAt = (hour: number) => {
 const DEFAULT_GEAR = ['Water', 'ID card', 'Helmet'];
 const DEFAULT_SAFETY = 'Respect everyone in the group.';
 
+/** WhatsApp / Telegram invite links, matching the backend's check in create_travel_group. */
+const CHAT_LINK_RE = /^https?:\/\/(chat\.whatsapp\.com\/[A-Za-z0-9_-]+|wa\.me\/[0-9]+|t\.me\/[A-Za-z0-9_+-]+|telegram\.me\/[A-Za-z0-9_+-]+)/i;
+
 /** Gear chips + free-text notes → the single safety_notes string the API stores. */
 const composeSafetyNotes = (gear: string[], notes: string) =>
   [gear.length ? `Bring: ${gear.join(', ')}.` : '', notes.trim()].filter(Boolean).join(' ') || null;
@@ -363,11 +366,12 @@ export const GroupsPage = () => {
   const planOk = formData.description.trim().length >= 20;
   const dateOk = !!formData.trip_date && new Date(formData.trip_date).getTime() > openedAt;
   const meetingOk = formData.meeting_area.trim().length > 0;
-  const requiredChecks = [destinationOk, titleOk, planOk, dateOk, meetingOk];
-  const requiredDone = requiredChecks.filter(Boolean).length;
+  // Every trip needs a group chat. Same rule the backend enforces (main.py create_travel_group)
   const chatLink = formData.chat_link.trim();
-  const chatOk = chatLink ? /^https?:\/\/\S+\.\S+/i.test(chatLink) : null;
-  const chatApp = chatOk ? (/whatsapp\.com/i.test(chatLink) ? 'WhatsApp' : /(t\.me|telegram\.)/i.test(chatLink) ? 'Telegram' : null) : null;
+  const chatOk = CHAT_LINK_RE.test(chatLink);
+  const chatApp = chatOk ? (/whatsapp|wa\.me/i.test(chatLink) ? 'WhatsApp' : 'Telegram') : null;
+  const requiredChecks = [destinationOk, titleOk, planOk, dateOk, meetingOk, chatOk];
+  const requiredDone = requiredChecks.filter(Boolean).length;
   const datePresets = useMemo(
     () => [
       { label: 'Tomorrow, 6 AM', value: toLocalInput(tomorrowAt(6)) },
@@ -382,7 +386,7 @@ export const GroupsPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
-    if (requiredDone < requiredChecks.length || chatOk === false) {
+    if (requiredDone < requiredChecks.length) {
       setShowErrors(true);
       requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="dialog"] .field-error')?.focus());
       return;
@@ -412,7 +416,7 @@ export const GroupsPage = () => {
         meeting_area: formData.meeting_area,
         estimated_cost: Number(formData.estimated_cost),
         max_members: Number(formData.max_members),
-        chat_link: formData.chat_link.trim() || null,
+        chat_link: chatLink,
         safety_notes: composeSafetyNotes(gear, formData.safety_notes),
       } as Parameters<typeof groupsApi.createGroup>[0]);
 
@@ -997,25 +1001,32 @@ export const GroupsPage = () => {
                 </FormSection>
 
                 {/* ── 5 · Chat & safety ── */}
-                <FormSection n={5} title="Chat and safety" optional last>
+                <FormSection n={5} title="Group chat and safety" last>
                   <div className="space-y-5">
                     <div className="rounded-3xl bg-paper border border-line p-5">
                       <label htmlFor="trip-chat" className="field-label !flex items-center gap-2">
-                        <MessageCircle className="w-4 h-4 text-sage-text" /> WhatsApp or Telegram invite link
+                        <MessageCircle className="w-4 h-4 text-sage-text" /> WhatsApp or Telegram group link
                       </label>
                       <p className="text-xs text-muted mb-3 flex items-center gap-1.5">
-                        <Lock className="w-3 h-3" /> Only people you approve will see it. You can add it later.
+                        <Lock className="w-3 h-3" /> Required. Only people you approve will see it.
                       </p>
                       <input
                         id="trip-chat"
                         type="url"
+                        required
                         placeholder="https://chat.whatsapp.com/… or https://t.me/…"
                         value={formData.chat_link}
                         onChange={(e) => setFormData({ ...formData, chat_link: e.target.value })}
-                        className={cn('field', chatOk === false && 'field-error')}
-                        aria-invalid={chatOk === false}
+                        className={cn('field', (showErrors || chatLink) && !chatOk && 'field-error')}
+                        aria-invalid={(showErrors || !!chatLink) && !chatOk}
                       />
-                      {chatOk === false && <FieldError>Paste a full link starting with https://</FieldError>}
+                      {(showErrors || chatLink) && !chatOk && (
+                        <FieldError>
+                          {chatLink
+                            ? 'Paste a WhatsApp (chat.whatsapp.com/…) or Telegram (t.me/…) invite link.'
+                            : 'Add your group chat link so approved members can join.'}
+                        </FieldError>
+                      )}
                       {chatApp && (
                         <p className="mt-2 text-xs font-bold text-sage-text flex items-center gap-1.5">
                           <Check className="w-3.5 h-3.5" /> {chatApp} group link
