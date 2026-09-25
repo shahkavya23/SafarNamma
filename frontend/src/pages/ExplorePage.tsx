@@ -45,7 +45,7 @@ const GemCard = ({ place, index }: { place: Place; index: number }) => {
   return (
     <Link
       to={`/places/${place.id}`}
-      className="group relative shrink-0 snap-start w-[78vw] sm:w-[380px] lg:w-auto lg:h-[min(52vh,480px)] aspect-[4/5] rounded-[28px] overflow-hidden bg-stone"
+      className="group relative shrink-0 snap-start w-[78vw] sm:w-[380px] lg:w-auto lg:h-[min(48vh,460px)] aspect-[4/5] rounded-[28px] overflow-hidden bg-stone"
     >
       <img
         src={optimizeImageUrl(place.image_url, 900) || fallback}
@@ -308,7 +308,7 @@ export const ExplorePage = () => {
         <div className="sticky-shelf" data-on={filterBarStuck} aria-hidden />
         <div className="max-w-7xl mx-auto px-3 sm:px-page">
           <div className="glass rounded-full card-shadow flex items-center gap-2 pl-2 pr-2 py-2">
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-1 min-w-0" data-lenis-prevent>
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-1 min-w-0" data-lenis-prevent-horizontal>
               <Chip group="cat" active={categoryFilter === ''} onClick={() => updateParam('category', '')}>
                 All
               </Chip>

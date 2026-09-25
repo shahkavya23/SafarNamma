@@ -9,11 +9,6 @@ interface HorizontalScrollerProps {
   trackClassName?: string;
 }
 
-// Overflow needed before the strip pins, and the overflow it must drop below before it unpins.
-// The gap stops it flipping back and forth when photos resize by a few pixels as they load.
-const PIN_AT = 40;
-const UNPIN_BELOW = 0;
-
 /* A pinned section: while it is on screen, vertical scrolling slides the track sideways.
    Falls back to a native swipeable row on small screens and for reduced motion.
    Both modes render the same element tree, so switching never remounts the children
@@ -29,11 +24,14 @@ export const HorizontalScroller = ({ header, children, className = '', trackClas
   useLayoutEffect(() => {
     const track = trackRef.current;
     if (!track) return;
+    // Pinning depends on the screen only. It used to depend on the measured overflow too,
+    // which differs between the two layouts, so the strip could flip modes mid-scroll and
+    // grow or shrink the page by thousands of pixels, throwing the reader up or down the page.
     const measure = () => {
-      const wide = window.matchMedia('(min-width: 1024px)').matches;
-      const overflow = track.scrollWidth - window.innerWidth;
-      setPinned((was) => wide && !reduced && overflow > (was ? UNPIN_BELOW : PIN_AT));
-      setDistance(Math.max(0, overflow));
+      setPinned(window.matchMedia('(min-width: 1024px)').matches && !reduced);
+      const next = Math.max(0, track.scrollWidth - window.innerWidth);
+      // Ignore sub-pixel wobble so the section height (and the page) stays put
+      setDistance((d) => (Math.abs(d - next) > 2 ? next : d));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -55,7 +53,7 @@ export const HorizontalScroller = ({ header, children, className = '', trackClas
       className={`relative ${className}`}
       style={pinned ? { height: `calc(100vh + ${distance}px)` } : undefined}
     >
-      <div className={pinned ? 'sticky top-0 h-screen flex flex-col justify-center overflow-hidden pt-36 pb-6' : ''}>
+      <div className={pinned ? 'sticky top-0 h-screen flex flex-col justify-center overflow-hidden pt-44 pb-6' : ''}>
         {header}
         <motion.div
           ref={trackRef}

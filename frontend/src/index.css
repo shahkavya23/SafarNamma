@@ -107,6 +107,9 @@
   html.lenis, html.lenis body { height: auto; }
   .lenis.lenis-smooth { scroll-behavior: auto !important; }
   .lenis.lenis-stopped { overflow: hidden; }
+  /* Lenis tracks its own scroll target; the browser's scroll anchoring nudging scrollY
+     behind its back when content above resizes makes the two fight (the page jumps) */
+  html.lenis { overflow-anchor: none; }
 
   body {
     background-color: var(--color-sand);

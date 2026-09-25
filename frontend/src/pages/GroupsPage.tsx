@@ -559,7 +559,7 @@ export const GroupsPage = () => {
         <div className="sticky-shelf" data-on={filterBarStuck} aria-hidden />
         <div className="max-w-7xl mx-auto px-3 sm:px-page">
           <div className="glass rounded-full card-shadow flex items-center gap-2 p-2">
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-1 min-w-0" data-lenis-prevent>
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-1 min-w-0" data-lenis-prevent-horizontal>
               {QUICK_FILTERS.map((f) => (
                 <Chip key={f.key} group="groups" active={quick === f.key} onClick={() => setQuick(f.key)}>
                   {f.label}
