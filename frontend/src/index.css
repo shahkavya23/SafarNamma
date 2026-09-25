@@ -135,6 +135,11 @@
 
   p { text-wrap: pretty; }
 
+  /* A grid with only breakpoint columns (lg:grid-cols-12…) has an auto-sized column on
+     phones that grows to its widest child — the hero search bar pushed text off-screen on
+     360px Redmis. Cap it at the screen width; any grid-cols-* utility still overrides this. */
+  .grid { grid-template-columns: minmax(0, 1fr); }
+
   input, textarea, select { color: var(--color-ink); }
 
   ::-webkit-scrollbar { width: 8px; }
