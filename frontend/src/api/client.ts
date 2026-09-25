@@ -42,11 +42,23 @@ const errorMessage = (detail: unknown, fallback: string): string => {
 export const authApi = {
   // Trades the Google ID token for our own session token (verified server-side)
   loginWithGoogle: async (credential: string): Promise<{ token: string; email: string; is_admin: boolean }> => {
-    const response = await fetch(`${BASE_URL}api/auth/google`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential }),
-    });
+    // Long enough for a sleeping Render instance to wake, short enough that sign-in never spins forever
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
+    let response: Response;
+    try {
+      response = await fetch(`${BASE_URL}api/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (controller.signal.aborted) throw new Error('The server is taking too long to respond. Please try again in a minute.');
+      throw new Error("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      clearTimeout(timer);
+    }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(errorMessage(data.detail, 'Sign-in failed. Please try again.'));
     return data;

@@ -27,18 +27,27 @@ export const LoginPage = () => {
   const handleGoogleSuccess = async (credentialResponse: any) => {
     setError('');
     setIsSlow(false);
+
+    let decodedToken: any;
+    try {
+      decodedToken = jwtDecode(credentialResponse.credential);
+    } catch {
+      setError('Google sign-in failed. Please try again.');
+      return;
+    }
+    const userEmail: string = (decodedToken.email || '').toLowerCase();
+
+    // Check the domain before the overlay goes up, so a wrong account gets a clear
+    // message instead of a spinner that covers it
+    if (!userEmail.endsWith('@sst.scaler.com')) {
+      setError(`${userEmail || 'This account'} isn't allowed. Please sign in with your @sst.scaler.com email.`);
+      return;
+    }
+
     setIsSigningIn(true);
     slowTimerRef.current = window.setTimeout(() => setIsSlow(true), SLOW_CONNECTION_HINT_MS);
 
     try {
-      const decodedToken: any = jwtDecode(credentialResponse.credential);
-      const userEmail = decodedToken.email;
-
-      if (!userEmail.endsWith('@sst.scaler.com')) {
-        setError('Access denied. Please use your @sst.scaler.com email address.');
-        return;
-      }
-
       // The backend verifies the Google token and issues our session token
       const session = await authApi.loginWithGoogle(credentialResponse.credential);
       const assignedRole = session.is_admin && isAdminEmail(userEmail) ? ('admin' as const) : ('user' as const);
@@ -58,6 +67,7 @@ export const LoginPage = () => {
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : 'Failed to process Google login.');
       setIsSigningIn(false);
+      setIsSlow(false);
     } finally {
       if (slowTimerRef.current) window.clearTimeout(slowTimerRef.current);
     }
