@@ -2,6 +2,12 @@ import type { Group, Place } from '../types';
 
 export const groupDestination = (group: Group, place?: Place) => group.custom_destination || place?.name || 'Local destination';
 
+/** The listed place a trip heads to, looked up by id (older rows use place_id). */
+export const findGroupPlace = (group: Group, places: Place[]) => {
+  const destId = group.destination_id || Number(group.place_id);
+  return destId ? places.find((p) => p.id === destId) : undefined;
+};
+
 export const seatsLeft = (group: Group) => Math.max(0, group.max_members - group.current_members);
 
 /** A trip whose date passed more than 12 hours ago. */

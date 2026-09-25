@@ -7,10 +7,11 @@ import { groupDestination, isPastTrip, seatsLeft } from '../../utils/groups';
 
 const StatusBadge: React.FC<{ group: Group; onPhoto?: boolean }> = ({ group, onPhoto }) => {
   const left = seatsLeft(group);
-  if (isPastTrip(group)) return <span className={`badge ${onPhoto ? 'glass-dark' : 'bg-stone text-muted'}`}>Completed</span>;
-  if (group.status === 'full' || left === 0) return <span className="badge badge-danger">Full</span>;
-  if (left <= 3) return <span className="badge bg-accent text-white">{left} {left === 1 ? 'seat' : 'seats'} left</span>;
-  return <span className={`badge ${onPhoto ? 'glass-dark' : 'badge-success'}`}>{left} seats open</span>;
+  const base = 'badge shrink-0 whitespace-nowrap';
+  if (isPastTrip(group)) return <span className={`${base} ${onPhoto ? 'glass-dark' : 'bg-stone text-muted'}`}>Completed</span>;
+  if (group.status === 'full' || left === 0) return <span className={`${base} badge-danger`}>Full</span>;
+  if (left <= 3) return <span className={`${base} bg-accent text-white`}>{left} {left === 1 ? 'seat' : 'seats'} left</span>;
+  return <span className={`${base} ${onPhoto ? 'glass-dark' : 'badge-success'}`}>{left} seats open</span>;
 };
 
 interface GroupCardProps {
@@ -63,8 +64,11 @@ export const GroupCard: React.FC<GroupCardProps> = ({ group, place, variant = 'p
           <span className="absolute -right-[6px] top-0 bottom-0 perforation" aria-hidden />
         </div>
         <div className="flex-1 min-w-0 p-5 flex flex-col">
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <span className="badge badge-teal truncate max-w-[65%]">{destination}</span>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <span className="badge badge-teal min-w-0" title={destination}>
+              {isRoute ? <Route className="w-3 h-3 shrink-0" /> : <MapPin className="w-3 h-3 shrink-0" />}
+              <span className="truncate">{destination}</span>
+            </span>
             <StatusBadge group={group} />
           </div>
           <h3 className="font-display text-xl text-ink leading-snug line-clamp-2 mb-3">{group.title}</h3>

@@ -24,6 +24,7 @@ import { Counter } from '../components/motion/Counter';
 import { photoProps, photoSrc } from '../utils/images';
 import { categoryIcon } from '../utils/categories';
 import { GroupCard } from '../components/groups/GroupCard';
+import { findGroupPlace } from '../utils/groups';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -503,7 +504,7 @@ const CommunitySection: React.FC = () => (
 /* ════════════════════════════════════════
    ACTIVE GROUPS
    ════════════════════════════════════════ */
-const ActiveGroups: React.FC<{ groups: Group[] }> = ({ groups }) => (
+const ActiveGroups: React.FC<{ groups: Group[]; places: Place[] }> = ({ groups, places }) => (
   <section className="py-24 px-page max-w-7xl mx-auto w-full">
     <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-14">
       <div>
@@ -523,7 +524,7 @@ const ActiveGroups: React.FC<{ groups: Group[] }> = ({ groups }) => (
       <Reveal stagger={0.1} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {groups.map((group) => (
           <RevealItem key={group.id} className="h-full">
-            <GroupCard group={group} variant="ticket" />
+            <GroupCard group={group} place={findGroupPlace(group, places)} variant="ticket" />
           </RevealItem>
         ))}
       </Reveal>
@@ -667,7 +668,7 @@ export const HomePage: React.FC = () => {
       {allPlaces.length > 0 && <DiscoveryCounter count={allPlaces.length} latest={latestFinds} />}
       <FeaturedPlaces places={featuredPlaces} total={allPlaces.length} />
       <CommunitySection />
-      <ActiveGroups groups={activeGroups} />
+      <ActiveGroups groups={activeGroups} places={allPlaces} />
       <GhatsInterlude />
       <HowItWorks />
     </div>

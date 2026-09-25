@@ -27,7 +27,8 @@ import {
 import { uploadImageToCloudinary } from '../utils/cloudinary';
 import { useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
-import { submissionsApi, groupsApi } from '../api/client';
+import { submissionsApi, groupsApi, placesApi } from '../api/client';
+import { findGroupPlace } from '../utils/groups';
 import type { Group, Place } from '../types';
 import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal } from '../components/motion/Reveal';
@@ -147,6 +148,7 @@ export const UserProfilePage = () => {
   const [userSubmissions, setUserSubmissions] = useState<Place[]>([]);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(true);
   const [hostedTrips, setHostedTrips] = useState<Group[]>([]);
+  const [tripPlaces, setTripPlaces] = useState<Place[]>([]);
   const [tab, setTab] = useState<Tab>('saved');
 
   const [isEditing, setIsEditing] = useState(false);
@@ -185,10 +187,11 @@ export const UserProfilePage = () => {
   useEffect(() => {
     if (!user?.email) return;
     let cancelled = false;
-    groupsApi
-      .getGroups()
-      .then((all) => {
-        if (!cancelled) setHostedTrips(all.filter((g) => g.organizer_email?.toLowerCase() === user.email.toLowerCase()));
+    Promise.all([groupsApi.getGroups(), placesApi.getPlaces().catch(() => [] as Place[])])
+      .then(([all, places]) => {
+        if (cancelled) return;
+        setHostedTrips(all.filter((g) => g.organizer_email?.toLowerCase() === user.email.toLowerCase()));
+        setTripPlaces(places || []);
       })
       .catch(() => {});
     return () => {
@@ -539,7 +542,7 @@ export const UserProfilePage = () => {
               ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {hostedTrips.map((g) => (
-                    <GroupCard key={g.id} group={g} variant="ticket" />
+                    <GroupCard key={g.id} group={g} place={findGroupPlace(g, tripPlaces)} variant="ticket" />
                   ))}
                 </div>
               ))}
