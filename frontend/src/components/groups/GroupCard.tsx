@@ -37,7 +37,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({ group, place, variant = 'p
       <div className="h-1.5 rounded-full bg-stone overflow-hidden mb-3" role="progressbar" aria-valuenow={group.current_members} aria-valuemax={group.max_members} aria-label="Seats filled">
         <div className="h-full bg-accent rounded-full transition-[width] duration-1000" style={{ width: `${fill}%` }} />
       </div>
-      <div className="flex justify-between items-center gap-3 text-sm">
+      <div className="flex items-center gap-3 text-sm">
         <span className="flex items-center gap-2 text-muted min-w-0">
           <span className="w-7 h-7 rounded-full bg-sage-soft text-sage-text flex items-center justify-center text-xs font-bold shrink-0">
             {group.organizer_name?.charAt(0).toUpperCase() || 'H'}
@@ -45,10 +45,6 @@ export const GroupCard: React.FC<GroupCardProps> = ({ group, place, variant = 'p
           <span className="truncate">
             {group.current_members}/{group.max_members} going
           </span>
-        </span>
-        <span className="font-bold text-ink shrink-0">
-          ₹{group.estimated_cost.toLocaleString('en-IN')}
-          <span className="text-muted font-normal text-xs"> / person</span>
         </span>
       </div>
     </div>

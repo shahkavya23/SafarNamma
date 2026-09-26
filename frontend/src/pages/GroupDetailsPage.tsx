@@ -3,7 +3,6 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   MapPin,
   CalendarDays,
-  IndianRupee,
   Users,
   Sparkles,
   ShieldAlert,
@@ -212,7 +211,6 @@ export const GroupDetailsPage = () => {
   const facts = [
     { icon: CalendarDays, label: 'When', value: date.toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) },
     { icon: MapPin, label: 'Meet at', value: group.meeting_area },
-    { icon: IndianRupee, label: 'Cost', value: `₹${group.estimated_cost.toLocaleString('en-IN')} / person` },
     { icon: Users, label: 'Group', value: `${group.current_members} of ${group.max_members} going` },
   ];
 
@@ -436,7 +434,6 @@ export const GroupDetailsPage = () => {
               <div className="min-w-0">
                 <p className="text-label text-sand/60 mb-1">{date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })} departure</p>
                 <p className="font-display text-xl leading-snug line-clamp-2">{stops.length ? stops.join(' → ') : destination}</p>
-                <p className="text-sm text-[#F4B08A] font-semibold mt-1">₹{group.estimated_cost.toLocaleString('en-IN')} / person</p>
               </div>
             </div>
 

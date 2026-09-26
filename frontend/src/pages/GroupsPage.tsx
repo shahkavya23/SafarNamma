@@ -47,12 +47,11 @@ import { cn } from '../utils/cn';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-type QuickFilter = 'all' | 'weekend' | 'budget' | 'seats';
+type QuickFilter = 'all' | 'weekend' | 'seats';
 
 const QUICK_FILTERS: { key: QuickFilter; label: string }[] = [
   { key: 'all', label: 'All trips' },
   { key: 'weekend', label: 'This weekend' },
-  { key: 'budget', label: 'Under ₹1,000' },
   { key: 'seats', label: 'Seats open' },
 ];
 
@@ -72,7 +71,6 @@ const thisWeekend = () => {
 /* ── Start-a-trip form helpers ── */
 const TITLE_MAX = 80;
 const PLAN_MAX = 800;
-const COST_PRESETS = [0, 300, 500, 1000, 2000];
 const GEAR_PRESETS = ['Water', 'ID card', 'Helmet', 'Trekking shoes', 'Rain jacket', 'Torch', 'Snacks'];
 const STOP_PLACEHOLDERS = ['e.g. Nandi Hills sunrise point', 'e.g. Indian Paratha Company for chai', 'e.g. Devanahalli Fort'];
 const PLAN_TEMPLATE = `5:30 AM – Meet and leave together
@@ -89,20 +87,10 @@ const toLocalInput = (d: Date) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-/** Next occurrence of a weekday (0 Sun … 6 Sat) at the given hour, always in the future. */
-const nextWeekdayAt = (weekday: number, hour: number) => {
+const daysFromNowAt = (days: number, hour: number, minute = 0) => {
   const d = new Date();
-  d.setHours(hour, 0, 0, 0);
-  let diff = (weekday - d.getDay() + 7) % 7;
-  if (diff === 0 && d.getTime() <= Date.now()) diff = 7;
-  d.setDate(d.getDate() + diff);
-  return d;
-};
-
-const tomorrowAt = (hour: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(hour, 0, 0, 0);
+  d.setDate(d.getDate() + days);
+  d.setHours(hour, minute, 0, 0);
   return d;
 };
 
@@ -275,7 +263,6 @@ export const GroupsPage = () => {
     description: '',
     trip_date: '',
     meeting_area: '',
-    estimated_cost: 500,
     max_members: 6,
     chat_link: '',
     safety_notes: DEFAULT_SAFETY,
@@ -390,11 +377,13 @@ export const GroupsPage = () => {
   const requiredChecks = [destinationOk, titleOk, planOk, dateOk, meetingOk, chatOk];
   const requiredDone = requiredChecks.filter(Boolean).length;
   const datePresets = useMemo(
-    () => [
-      { label: 'Tomorrow, 6 AM', value: toLocalInput(tomorrowAt(6)) },
-      { label: 'Sat, 5:30 AM', value: toLocalInput(new Date(nextWeekdayAt(6, 5).getTime() + 30 * 60_000)) },
-      { label: 'Sun, 6 AM', value: toLocalInput(nextWeekdayAt(0, 6)) },
-    ],
+    () => {
+      const dayAfter = daysFromNowAt(2, 8);
+      const dayAfterLabel = dayAfter.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+      return [
+        { label: `${dayAfterLabel}, 8 AM`, value: toLocalInput(dayAfter) },
+      ];
+    },
     // Recompute each time the sheet opens so "tomorrow" stays accurate
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [openedAt],
@@ -431,7 +420,6 @@ export const GroupsPage = () => {
         description: formData.description,
         trip_date: new Date(formData.trip_date).toISOString(),
         meeting_area: formData.meeting_area,
-        estimated_cost: Number(formData.estimated_cost),
         max_members: Number(formData.max_members),
         chat_link: chatLink,
         safety_notes: composeSafetyNotes(gear, formData.safety_notes),
@@ -445,7 +433,6 @@ export const GroupsPage = () => {
           description: '',
           trip_date: '',
           meeting_area: '',
-          estimated_cost: 500,
           max_members: 6,
           chat_link: '',
           safety_notes: DEFAULT_SAFETY,
@@ -476,7 +463,6 @@ export const GroupsPage = () => {
       .filter((g) => {
         const t = new Date(g.trip_date).getTime();
         if (quick === 'weekend') return t >= wkStart && t < wkEnd;
-        if (quick === 'budget') return g.estimated_cost <= 1000;
         if (quick === 'seats') return g.status !== 'full' && seatsLeft(g) > 0 && !isPastTrip(g);
         return true;
       })
@@ -978,81 +964,45 @@ export const GroupsPage = () => {
                   </div>
                 </FormSection>
 
-                {/* ── 4 · Cost & seats ── */}
-                <FormSection n={4} title="Cost and group size">
-                  <div className="grid sm:grid-cols-2 gap-5">
-                    <div>
-                      <label htmlFor="trip-cost" className="field-label">
-                        Cost per person
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted pointer-events-none">₹</span>
-                        <input
-                          id="trip-cost"
-                          type="number"
-                          inputMode="numeric"
-                          min="0"
-                          step="50"
-                          value={formData.estimated_cost}
-                          onChange={(e) => setFormData({ ...formData, estimated_cost: Math.max(0, Number(e.target.value)) })}
-                          className="field !pl-9 tabular-nums"
-                        />
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 mt-2.5">
-                        {COST_PRESETS.map((c) => (
-                          <button
-                            key={c}
-                            type="button"
-                            aria-pressed={formData.estimated_cost === c}
-                            onClick={() => setFormData({ ...formData, estimated_cost: c })}
-                            className={cn(
-                              'px-2.5 py-1 rounded-full text-xs font-bold border transition-colors',
-                              formData.estimated_cost === c ? 'bg-ink text-sand border-ink' : 'border-line-strong text-body hover:border-ink hover:text-ink',
-                            )}
-                          >
-                            {c === 0 ? 'Free' : `₹${c.toLocaleString('en-IN')}`}
-                          </button>
-                        ))}
-                      </div>
+                {/* ── 4 · Group size ── */}
+                <FormSection n={4} title="Group size">
+                  <div className="max-w-xs">
+                    <label htmlFor="trip-size" className="field-label">
+                      How many people? <span className="font-medium text-muted">(incl. you)</span>
+                    </label>
+                    <div className="field !p-1.5 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, max_members: Math.max(2, formData.max_members - 1) })}
+                        disabled={formData.max_members <= 2}
+                        className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
+                        aria-label="Fewer people"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <input
+                        id="trip-size"
+                        type="number"
+                        inputMode="numeric"
+                        min="2"
+                        max="30"
+                        value={formData.max_members}
+                        onChange={(e) => setFormData({ ...formData, max_members: Math.max(2, Math.min(30, Number(e.target.value) || 2)) })}
+                        className="w-14 text-center bg-transparent font-bold text-lg text-ink tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, max_members: Math.min(30, formData.max_members + 1) })}
+                        disabled={formData.max_members >= 30}
+                        className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
+                        aria-label="More people"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
                     </div>
-                    <div>
-                      <label htmlFor="trip-size" className="field-label">
-                        Group size <span className="font-medium text-muted">(incl. you)</span>
-                      </label>
-                      <div className="field !p-1.5 flex items-center justify-between">
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, max_members: Math.max(2, formData.max_members - 1) })}
-                          disabled={formData.max_members <= 2}
-                          className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
-                          aria-label="Fewer people"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <input
-                          id="trip-size"
-                          type="number"
-                          inputMode="numeric"
-                          min="2"
-                          max="30"
-                          value={formData.max_members}
-                          onChange={(e) => setFormData({ ...formData, max_members: Math.max(2, Math.min(30, Number(e.target.value) || 2)) })}
-                          className="w-14 text-center bg-transparent font-bold text-lg text-ink tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, max_members: Math.min(30, formData.max_members + 1) })}
-                          disabled={formData.max_members >= 30}
-                          className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
-                          aria-label="More people"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <p className="field-hint mt-2.5">
-                        {formData.max_members - 1} {formData.max_members - 1 === 1 ? 'seat' : 'seats'} open for others
-                      </p>
-                    </div>
+                    <p className="field-hint mt-2.5">
+                      {formData.max_members - 1} {formData.max_members - 1 === 1 ? 'seat' : 'seats'} open for others
+                    </p>
                   </div>
                 </FormSection>
 

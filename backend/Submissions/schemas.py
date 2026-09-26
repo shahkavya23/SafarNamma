@@ -135,7 +135,6 @@ class TravelGroupCreate(BaseModel):
     description : str 
     trip_date : NaiveUtcDatetime 
     meeting_area : str 
-    estimated_cost : float = 0.0 
     max_members : int =  6
     chat_link : Optional[str] = None
     safety_notes : Optional[str] = None 
@@ -151,8 +150,8 @@ class TravelGroupResponse(BaseModel):
     description : str 
     trip_date : UtcDatetime 
     meeting_area : str 
-    estimated_cost : float 
-    max_members : int 
+    estimated_cost : float = 0.0
+    max_members : int
     current_members : int 
     chat_link : Optional[str] = None 
     status : str 

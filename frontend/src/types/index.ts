@@ -53,7 +53,7 @@ export interface Group {
   description: string;
   trip_date: string;
   meeting_area: string;
-  estimated_cost: number;
+  estimated_cost?: number;
   max_members: number;
   current_members: number;
   organizer_name: string;
