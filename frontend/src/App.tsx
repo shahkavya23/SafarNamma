@@ -9,6 +9,7 @@ import { ExplorePage } from './pages/ExplorePage';
 import { PlaceDetailsPage } from './pages/PlaceDetailsPage';
 import { GroupsPage } from './pages/GroupsPage';
 import { GroupDetailsPage } from './pages/GroupDetailsPage';
+import { TripStoryPage } from './pages/TripStoryPage';
 import { SubmitPlacePage } from './pages/SubmitPlacePage';
 import { EditPlacePage } from './pages/EditPlacePage';
 import { LoginPage } from './pages/LoginPage';
@@ -40,6 +41,11 @@ function App() {
             <Route path="groups/:id" element={
               <ProtectedRoute>
                 <GroupDetailsPage />
+              </ProtectedRoute>
+            } />
+            <Route path="groups/:id/story" element={
+              <ProtectedRoute>
+                <TripStoryPage />
               </ProtectedRoute>
             } />
             

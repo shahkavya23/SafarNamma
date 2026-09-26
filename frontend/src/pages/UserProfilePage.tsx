@@ -8,6 +8,7 @@ import {
   MapPin,
   Heart,
   Users,
+  Sparkles,
   X,
   Compass,
   Plus,
@@ -28,7 +29,7 @@ import { uploadImageToCloudinary } from '../utils/cloudinary';
 import { useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { submissionsApi, groupsApi, placesApi } from '../api/client';
-import { findGroupPlace } from '../utils/groups';
+import { findGroupPlace, isStoryUnlocked } from '../utils/groups';
 import type { Group, Place } from '../types';
 import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal } from '../components/motion/Reveal';
@@ -187,10 +188,11 @@ export const UserProfilePage = () => {
   useEffect(() => {
     if (!user?.email) return;
     let cancelled = false;
-    Promise.all([groupsApi.getGroups(), placesApi.getPlaces().catch(() => [] as Place[])])
+    // Hosted + joined trips, finished ones included, so members can come back and make their story
+    Promise.all([groupsApi.getMyTrips(), placesApi.getPlaces().catch(() => [] as Place[])])
       .then(([all, places]) => {
         if (cancelled) return;
-        setHostedTrips(all.filter((g) => g.organizer_email?.toLowerCase() === user.email.toLowerCase()));
+        setHostedTrips(all);
         setTripPlaces(places || []);
       })
       .catch(() => {});
@@ -306,13 +308,13 @@ export const UserProfilePage = () => {
     { n: favorites.length, l: 'Saved places' },
     { n: userSubmissions.length, l: 'Places shared' },
     { n: liveCount, l: 'Live on SafarNamma' },
-    { n: hostedTrips.length, l: 'Trips hosted' },
+    { n: hostedTrips.filter((g) => g.organizer_email?.toLowerCase() === user?.email.toLowerCase()).length, l: 'Trips hosted' },
   ];
 
   const tabs: { key: Tab; label: string; count: number; icon: typeof Heart }[] = [
     { key: 'saved', label: 'Saved', count: favorites.length, icon: Heart },
     { key: 'shared', label: 'Shared', count: userSubmissions.length, icon: Compass },
-    { key: 'trips', label: 'Hosting', count: hostedTrips.length, icon: Users },
+    { key: 'trips', label: 'My trips', count: hostedTrips.length, icon: Users },
   ];
 
   return (
@@ -538,12 +540,25 @@ export const UserProfilePage = () => {
 
             {tab === 'trips' &&
               (hostedTrips.length === 0 ? (
-                <EmptyState title="You're not hosting any trips" body="Pick a place, set a date and gather your crew. You approve who joins." cta="Start a trip" to="/groups" />
+                <EmptyState title="No trips yet" body="Host a trip or join one. Finished trips show up here so you can make your Instagram story." cta="Find a trip" to="/groups" />
               ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {hostedTrips.map((g) => (
-                    <GroupCard key={g.id} group={g} place={findGroupPlace(g, tripPlaces)} variant="ticket" />
-                  ))}
+                  {hostedTrips.map((g) => {
+                    const hosting = g.organizer_email?.toLowerCase() === user?.email.toLowerCase();
+                    return (
+                      <div key={g.id} className="flex flex-col gap-3">
+                        <div className="relative flex-1">
+                          <span className={`badge absolute -top-2.5 left-28 z-10 shadow-sm ${hosting ? 'bg-ink text-sand' : 'badge-teal'}`}>{hosting ? 'Hosting' : 'Joined'}</span>
+                          <GroupCard group={g} place={findGroupPlace(g, tripPlaces)} variant="ticket" />
+                        </div>
+                        {isStoryUnlocked(g) && (
+                          <Link to={`/groups/${g.id}/story`} className="btn-accent !py-2.5 w-full">
+                            <Sparkles className="w-4 h-4" /> Make story
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
           </motion.div>

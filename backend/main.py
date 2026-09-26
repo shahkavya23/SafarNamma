@@ -425,13 +425,41 @@ def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(
 
 
 
+# Keep in sync with TRIP_LISTED_HOURS in frontend/src/utils/groups.ts
+TRIP_LISTED_AFTER_DEPARTURE = timedelta(hours=24)
+
+
 @app.get("/api/groups", response_model=List[schemas.TravelGroupResponse])
 def get_travel_groups(db: Session = Depends(get_db)):
-    # Auto-expiration: groups disappear once their visiting date and time has passed
-    now = datetime.utcnow()
+    # Auto-expiration: a trip stays listed for 24 hours after it departs (shown as "just wrapped",
+    # so the crew can still find it and make their story), then disappears
+    cutoff = datetime.utcnow() - TRIP_LISTED_AFTER_DEPARTURE
     return db.query(models.TravelGroup).filter(
-        models.TravelGroup.trip_date > now
+        models.TravelGroup.trip_date > cutoff
     ).order_by(models.TravelGroup.created_at.desc()).all()
+
+
+@app.get("/api/me/trips", response_model=List[schemas.TravelGroupResponse])
+def get_my_trips(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Trips the caller hosted or was approved on, past ones included (for 'My trips' and the story maker)."""
+    email = user.email.lower()
+    approved_ids = [
+        r.group_id for r in db.query(models.GroupRequest).filter(
+            models.GroupRequest.user_email.ilike(email),
+            models.GroupRequest.status == "approved",
+        ).all()
+    ]
+    groups = db.query(models.TravelGroup).filter(
+        (models.TravelGroup.organizer_email.ilike(email)) | (models.TravelGroup.id.in_(approved_ids or [-1]))
+    ).order_by(models.TravelGroup.trip_date.desc()).all()
+
+    result = []
+    for g in groups:
+        item = schemas.TravelGroupResponse.model_validate(g)
+        if g.organizer_email.lower() != email:
+            item.user_request_status = "approved"
+        result.append(item)
+    return result
 
 
 @app.delete("/api/groups/{group_id}", status_code=status.HTTP_200_OK)

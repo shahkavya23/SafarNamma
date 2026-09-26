@@ -168,6 +168,18 @@ export const groupsApi = {
     }
   },
 
+  // Trips I hosted or was approved on, finished ones included (My trips, story maker)
+  getMyTrips: async (): Promise<Group[]> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/me/trips`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch my trips", error);
+      return [];
+    }
+  },
+
   // 2. Fetch single group (passes logged-in user email to check if chat_link should be revealed)
   getGroupById: async (id: string | number, userEmail?: string): Promise<Group | undefined> => {
     try {

@@ -24,6 +24,7 @@ import { Counter } from '../components/motion/Counter';
 import { photoProps, photoSrc } from '../utils/images';
 import { categoryIcon } from '../utils/categories';
 import { DepartureBoard } from '../components/groups/DepartureBoard';
+import { StoryPromoSection } from '../components/groups/StoryPromo';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -655,6 +656,8 @@ export const HomePage: React.FC = () => {
       <Hero placeCount={allPlaces.length || cachedCount} />
       {/* Trips are the USP, so the board sits right under the hero */}
       <ActiveGroups groups={activeGroups} places={allPlaces} loaded={groupsLoaded} />
+      {/* New: Trip Story Maker, right after the trips it rewards */}
+      <StoryPromoSection />
       <NameMarquee names={marqueeNames} />
       {allPlaces.length > 0 && <DiscoveryCounter count={allPlaces.length} latest={latestFinds} />}
       <FeaturedPlaces places={featuredPlaces} total={allPlaces.length} />

@@ -5,6 +5,7 @@ import {
   CalendarDays,
   IndianRupee,
   Users,
+  Sparkles,
   ShieldAlert,
   CheckCircle,
   MessageCircle,
@@ -30,7 +31,7 @@ import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal, RevealItem } from '../components/motion/Reveal';
 import { PlaceCard } from '../components/places/PlaceCard';
 import { fallbackPhoto } from '../utils/images';
-import { groupDestination, isPastTrip, routeStops, seatsLeft } from '../utils/groups';
+import { groupDestination, isPastTrip, isStoryUnlocked, routeStops, seatsLeft, storyUnlockTime } from '../utils/groups';
 import { cn } from '../utils/cn';
 
 export const GroupDetailsPage = () => {
@@ -199,6 +200,8 @@ export const GroupDetailsPage = () => {
   const date = new Date(group.trip_date);
   const left = seatsLeft(group);
   const past = isPastTrip(group);
+  const storyReady = isStoryUnlocked(group);
+  const isSameDay = (d: Date) => d.toDateString() === new Date().toDateString();
   const fill = Math.min(100, Math.round((group.current_members / Math.max(1, group.max_members)) * 100));
   const destination = groupDestination(group, place ?? undefined);
   const stops = routeStops(group.custom_destination);
@@ -271,6 +274,34 @@ export const GroupDetailsPage = () => {
 
       {/* ── Key facts ── */}
       <FactsCard facts={facts} />
+
+      {/* ── Story maker: opens for the crew 90 minutes after the start ── */}
+      {(isOrganizer || isApprovedMember) && (storyReady || isSameDay(date)) && (
+        <div className="max-w-7xl mx-auto px-page pt-12">
+          {storyReady ? (
+            <Link
+              to={`/groups/${group.id}/story`}
+              className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl bg-night text-sand p-6 sm:p-8 card-shadow-hover"
+            >
+              <div>
+                <p className="section-label !text-[#F4B08A] mb-2">Trip done?</p>
+                <p className="font-display text-2xl sm:text-3xl">Make your Instagram story in seconds.</p>
+                <p className="text-[#C9D2CE] text-sm mt-1.5">Add a photo or two for each place. We’ll design it and write the caption.</p>
+              </div>
+              <span className="btn-accent shrink-0 self-start sm:self-auto">
+                <Sparkles className="w-4 h-4" /> Make your story
+              </span>
+            </Link>
+          ) : (
+            <p className="rounded-2xl border border-line bg-paper px-5 py-4 text-sm text-body flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-accent-text shrink-0" />
+              Story maker opens at{' '}
+              <span className="font-semibold text-ink">{storyUnlockTime(group).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</span>. Come back after
+              the trip to turn your photos into an Instagram story.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-page pt-24 pb-28 grid lg:grid-cols-[minmax(0,1fr)_380px] gap-14 lg:gap-20">
         <div className="min-w-0 space-y-20">

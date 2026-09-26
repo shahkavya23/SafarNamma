@@ -27,11 +27,13 @@ import {
   Minus,
   Check,
   CalendarDays,
+  Clock,
 } from 'lucide-react';
 import type { Group, Place } from '../types';
 import { groupsApi, placesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { GroupCard } from '../components/groups/GroupCard';
+import { StoryPromoAnnouncement } from '../components/groups/StoryPromo';
 import { PlacePicker } from '../components/groups/PlacePicker';
 import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal } from '../components/motion/Reveal';
@@ -39,7 +41,7 @@ import { Counter } from '../components/motion/Counter';
 import { Chip } from '../components/ui/Chip';
 import { useIsStuck } from '../hooks/useIsStuck';
 import { photoProps, type PhotoKey } from '../utils/images';
-import { isPastTrip, seatsLeft } from '../utils/groups';
+import { isPastTrip, seatsLeft, timeLeftLabel, TRIP_LISTED_HOURS } from '../utils/groups';
 import { setScrollLocked } from '../hooks/useLenis';
 import { cn } from '../utils/cn';
 
@@ -489,6 +491,10 @@ export const GroupsPage = () => {
       });
   }, [groups, destinationIdParam, targetPlace, quick]);
 
+  // Departed trips stay listed for 24 hours, in their own "just wrapped" section below the joinable ones
+  const upcomingTrips = filteredGroups.filter((g) => !isPastTrip(g));
+  const wrappedTrips = filteredGroups.filter((g) => isPastTrip(g));
+
   const upcoming = groups.filter((g) => !isPastTrip(g));
   const openSeats = upcoming.filter((g) => g.status !== 'full').reduce((sum, g) => sum + seatsLeft(g), 0);
   const destinations = new Set(upcoming.map((g) => g.custom_destination || g.place?.name).filter(Boolean)).size;
@@ -572,6 +578,12 @@ export const GroupsPage = () => {
         </Reveal>
       </div>
 
+      {/* ── New: Trip Story Maker (pops up once on the first visit, then stays as a banner) ── */}
+      <StoryPromoAnnouncement
+        onHost={handleOpenModal}
+        onBrowse={() => gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+      />
+
       {/* ── Filters (sticky only while the trips are on screen) + trips ── */}
       <div>
       <div ref={filterBarRef} className="sticky z-30 top-[6.75rem] mt-8">
@@ -606,7 +618,7 @@ export const GroupsPage = () => {
                 'Loading trips…'
               ) : (
                 <>
-                  {filteredGroups.length} {filteredGroups.length === 1 ? 'trip' : 'trips'} <span className="accent-word">to join.</span>
+                  {upcomingTrips.length} {upcomingTrips.length === 1 ? 'trip' : 'trips'} <span className="accent-word">to join.</span>
                 </>
               )}
             </h2>
@@ -634,7 +646,7 @@ export const GroupsPage = () => {
               </div>
             ))}
           </div>
-        ) : filteredGroups.length === 0 ? (
+        ) : upcomingTrips.length === 0 ? (
           <Reveal className="card grid md:grid-cols-2 overflow-hidden">
             <div className="relative min-h-[260px] md:min-h-[400px]">
               <img {...photoProps('friends', '(min-width: 768px) 50vw, 100vw')} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
@@ -668,7 +680,7 @@ export const GroupsPage = () => {
         ) : (
           <motion.div layout={!reduced} className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             <AnimatePresence mode="popLayout" initial={false}>
-              {filteredGroups.map((group, i) => (
+              {upcomingTrips.map((group, i) => (
                 <motion.div
                   key={group.id}
                   layout={!reduced}
@@ -684,6 +696,35 @@ export const GroupsPage = () => {
               ))}
             </AnimatePresence>
           </motion.div>
+        )}
+
+        {/* ── Just wrapped: departed in the last 24 hours. Can't be joined, but the crew can still find it ── */}
+        {!isLoading && wrappedTrips.length > 0 && (
+          <div className="mt-20">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 pt-10 border-t border-dashed border-line-strong">
+              <div>
+                <p className="section-label mb-3">Just wrapped</p>
+                <h3 className="font-display text-3xl text-ink">
+                  {wrappedTrips.length} {wrappedTrips.length === 1 ? 'trip' : 'trips'} <span className="accent-word">just happened.</span>
+                </h3>
+                <p className="text-muted text-sm mt-2 max-w-xl">
+                  Trips stay here for {TRIP_LISTED_HOURS} hours after they leave. Were you on one? Open it to make your Instagram story before it disappears.
+                </p>
+              </div>
+            </div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {wrappedTrips.map((group) => (
+                <div key={group.id} className="relative h-full">
+                  <span className="badge bg-ink text-sand absolute -top-3 right-5 z-20 shadow-md">
+                    <Clock className="w-3 h-3" /> {timeLeftLabel(group)}
+                  </span>
+                  <div className="h-full grayscale-[55%] opacity-85 hover:grayscale-0 hover:opacity-100 transition-[filter,opacity] duration-500">
+                    <GroupCard group={group} place={group.place} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </section>
       </div>
