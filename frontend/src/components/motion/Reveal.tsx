@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Children, isValidElement, type ReactNode } from 'react';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -35,8 +35,18 @@ export const Reveal = ({ children, className, delay = 0, y = 28, stagger, as = '
     return <Plain className={className}>{children}</Plain>;
   }
 
+  // A staggered list whose items change after it has revealed (placeholders swapped for API data,
+  // a new review) would leave the new <RevealItem>s stuck invisible: they mount in "hidden" and the
+  // once-only reveal never fires again. Keying on the item keys restarts the reveal instead.
+  const itemsKey = stagger
+    ? Children.toArray(children)
+        .map((c) => (isValidElement(c) ? String(c.key) : ''))
+        .join('|')
+    : undefined;
+
   return (
     <Tag
+      key={itemsKey}
       className={className}
       variants={stagger ? { hidden: {}, show: variants.show } : variants}
       initial="hidden"
