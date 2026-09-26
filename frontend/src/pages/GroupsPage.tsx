@@ -359,6 +359,21 @@ export const GroupsPage = () => {
     setIsModalOpen(true);
   };
 
+  // "Start your own" / "Host a trip" links elsewhere land here with ?host=1: open the sheet once places are in
+  useEffect(() => {
+    if (searchParams.get('host') !== '1' || isLoading) return;
+    handleOpenModal();
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('host');
+        return next;
+      },
+      { replace: true }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, isLoading]);
+
   // Validation for the start-a-trip sheet
   const isCustomRoute = formData.destination_id === 'custom';
   const destinationOk = isCustomRoute ? customStops.filter((s) => s.trim()).length >= 2 : !!formData.destination_id;

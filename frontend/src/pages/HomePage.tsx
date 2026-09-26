@@ -23,8 +23,7 @@ import { ParallaxImage } from '../components/motion/ParallaxImage';
 import { Counter } from '../components/motion/Counter';
 import { photoProps, photoSrc } from '../utils/images';
 import { categoryIcon } from '../utils/categories';
-import { GroupCard } from '../components/groups/GroupCard';
-import { findGroupPlace } from '../utils/groups';
+import { DepartureBoard } from '../components/groups/DepartureBoard';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -465,7 +464,8 @@ const FeaturedPlaces: React.FC<{ places: Place[]; total: number }> = ({ places, 
    COMMUNITY — one photo, one idea
    ════════════════════════════════════════ */
 const CommunitySection: React.FC = () => (
-  <section className="px-3 sm:px-5">
+  // Bottom gap keeps the rounded card off the full-bleed Ghats photo that follows
+  <section className="px-3 sm:px-5 pb-20 lg:pb-24">
     <div className="relative rounded-[36px] overflow-hidden min-h-[78vh] flex items-end bg-night grain">
       <ParallaxImage {...photoProps('friends')} strength={18} frameClassName="!absolute inset-0" />
       <div className="absolute inset-0 bg-gradient-to-r from-night/95 via-night/55 to-night/5" />
@@ -490,7 +490,7 @@ const CommunitySection: React.FC = () => (
               <Link to="/groups" className="btn-primary">
                 <Users className="w-4 h-4" /> Browse trips
               </Link>
-              <Link to="/groups" className="btn-ghost">
+              <Link to="/groups?host=1" className="btn-ghost">
                 Start your own
               </Link>
             </div>
@@ -504,9 +504,9 @@ const CommunitySection: React.FC = () => (
 /* ════════════════════════════════════════
    ACTIVE GROUPS
    ════════════════════════════════════════ */
-const ActiveGroups: React.FC<{ groups: Group[]; places: Place[] }> = ({ groups, places }) => (
-  <section className="py-24 px-page max-w-7xl mx-auto w-full">
-    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-14">
+const ActiveGroups: React.FC<{ groups: Group[]; places: Place[]; loaded: boolean }> = ({ groups, places, loaded }) => (
+  <section className="py-20 lg:py-24 px-page max-w-7xl mx-auto w-full">
+    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-10">
       <div>
         <Reveal>
           <p className="section-label mb-5">Trips coming up</p>
@@ -520,25 +520,9 @@ const ActiveGroups: React.FC<{ groups: Group[]; places: Place[] }> = ({ groups, 
       </Reveal>
     </div>
 
-    {groups.length > 0 ? (
-      <Reveal stagger={0.1} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {groups.map((group) => (
-          <RevealItem key={group.id} className="h-full">
-            <GroupCard group={group} place={findGroupPlace(group, places)} variant="ticket" />
-          </RevealItem>
-        ))}
-      </Reveal>
-    ) : (
-      <Reveal className="card p-10 sm:p-14 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-        <div>
-          <h3 className="font-display text-2xl text-ink mb-2">No trips planned yet</h3>
-          <p className="text-muted">Pick a place, set a date and gather your crew. It takes two minutes.</p>
-        </div>
-        <Link to="/groups" className="btn-primary shrink-0">
-          Plan the first one <ArrowRight className="w-4 h-4" />
-        </Link>
-      </Reveal>
-    )}
+    <Reveal>
+      <DepartureBoard groups={groups} places={places} loaded={loaded} />
+    </Reveal>
   </section>
 );
 
@@ -617,6 +601,7 @@ const PLACE_COUNT_KEY = 'home:placeCount';
 export const HomePage: React.FC = () => {
   const [featuredPlaces, setFeaturedPlaces] = useState<Place[]>([]);
   const [activeGroups, setActiveGroups] = useState<Group[]>([]);
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
   const [allPlaces, setAllPlaces] = useState<Place[]>([]);
   // Last known count, so the hero card has a number before the places request returns
   const [cachedCount, setCachedCount] = useState<number>(() => {
@@ -632,7 +617,11 @@ export const HomePage: React.FC = () => {
     // (or slow) request shouldn't hold back or blank the others
     const onError = (err: unknown) => console.error('Failed to load home data:', err);
     placesApi.getPopularWeekend().then((v) => setFeaturedPlaces(v || [])).catch(onError);
-    groupsApi.getGroups().then((v) => setActiveGroups((v || []).slice(0, 3))).catch(onError);
+    groupsApi
+      .getGroups()
+      .then((v) => setActiveGroups(v || []))
+      .catch(onError)
+      .finally(() => setGroupsLoaded(true));
     placesApi
       .getPlaces()
       .then((v) => {
@@ -664,11 +653,12 @@ export const HomePage: React.FC = () => {
   return (
     <div className="flex flex-col w-full bg-sand min-h-screen">
       <Hero placeCount={allPlaces.length || cachedCount} />
+      {/* Trips are the USP, so the board sits right under the hero */}
+      <ActiveGroups groups={activeGroups} places={allPlaces} loaded={groupsLoaded} />
       <NameMarquee names={marqueeNames} />
       {allPlaces.length > 0 && <DiscoveryCounter count={allPlaces.length} latest={latestFinds} />}
       <FeaturedPlaces places={featuredPlaces} total={allPlaces.length} />
       <CommunitySection />
-      <ActiveGroups groups={activeGroups} places={allPlaces} />
       <GhatsInterlude />
       <HowItWorks />
     </div>
