@@ -67,6 +67,7 @@ class Destination(Base):
         primaryjoin="foreign(Destination.submitted_by_email) == remote(User.email)",
         viewonly=True,
         uselist=False,
+        lazy="selectin",
     )
 
     @property
