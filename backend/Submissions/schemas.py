@@ -30,6 +30,7 @@ class DestinationBase(BaseModel) :
     duration : Optional[str] = None
     is_approved : Optional[bool] = False
     submitted_by_email : Optional[str] = None
+    submitted_by_name : Optional[str] = None
     submission_status : Optional[str] = "pending"
     opening_hours : Optional[str] = None
     closing_hours : Optional[str] = None

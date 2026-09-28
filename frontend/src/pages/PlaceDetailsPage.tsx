@@ -21,6 +21,7 @@ import {
   Users,
   Share2,
   UtensilsCrossed,
+  Compass,
 } from 'lucide-react';
 import type { Place, Review } from '../types';
 import { placesApi, reviewApi } from '../api/client';
@@ -34,7 +35,7 @@ import { DetailHero, FactsCard } from '../components/detail/DetailHero';
 import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal, RevealItem } from '../components/motion/Reveal';
 import { fallbackPhoto } from '../utils/images';
-import { formatBudget, shortLocation } from '../utils/format';
+import { formatBudget, shortLocation, formatSubmitterName } from '../utils/format';
 import { categoryIcon } from '../utils/categories';
 import { isHoursInDescription, isOpen247 } from '../utils/hours';
 
@@ -291,6 +292,8 @@ export const PlaceDetailsPage = () => {
   const location = shortLocation(place.state, 40) || 'Karnataka';
   const CategoryIcon = categoryIcon(place.category);
   const hours = formatVisitingHours(place.opening_hours, place.closing_hours);
+  const submitterName = formatSubmitterName(place.submitted_by_name, place.submitted_by_email);
+  const submitterInitial = (submitterName[0] || 'c').toUpperCase();
 
   const facts = [
     { icon: IndianRupee, label: 'Budget', value: formatBudget(place.budget_tier) },
@@ -324,6 +327,7 @@ export const PlaceDetailsPage = () => {
   const passFooter = [
     { label: 'Open', value: hours },
     { label: 'Category', value: place.category },
+    { label: 'Submitted by', value: submitterName },
   ];
 
   const nearby = place.nearby_facilities
@@ -392,6 +396,12 @@ export const PlaceDetailsPage = () => {
                 </span>
               </span>
             )}
+            <span className="flex items-center gap-1.5 text-xs text-[#D8DEDA]/90 bg-white/10 px-2.5 py-1 rounded-full backdrop-blur-sm border border-white/10">
+              <Compass className="w-3.5 h-3.5 text-[#F4B08A]" />
+              <span>
+                submitted by <span className="lowercase font-medium text-white">{submitterName}</span>
+              </span>
+            </span>
           </div>
         }
         actions={
@@ -433,7 +443,18 @@ export const PlaceDetailsPage = () => {
           {/* About */}
           <section id="place-story" className="scroll-mt-32">
             <Reveal>
-              <p className="section-label mb-5">The story</p>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <p className="section-label mb-0">The story</p>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sand-soft/80 border border-line text-xs text-muted shadow-sm">
+                  <span className="w-5 h-5 rounded-full bg-accent/15 text-accent-text flex items-center justify-center font-display text-[10px] font-bold uppercase">
+                    {submitterInitial}
+                  </span>
+                  <span>
+                    discovered & submitted by{' '}
+                    <span className="lowercase font-semibold text-ink">{submitterName}</span>
+                  </span>
+                </div>
+              </div>
             </Reveal>
             <SplitHeading className="text-display text-ink mb-8" style={{ fontSize: 'clamp(2rem, 4vw, 3.25rem)' }} parts={[{ text: 'Why people' }, { text: 'love it.', accent: true }]} />
             <Reveal delay={0.1} className="space-y-5 max-w-[64ch]">
@@ -606,7 +627,9 @@ export const PlaceDetailsPage = () => {
           {/* Footer: source + admin */}
           <div className="flex flex-wrap items-center justify-between gap-4 pt-6 border-t border-line text-xs text-muted">
             <div className="flex items-center gap-4">
-              <span>Source: community submitted, admin verified</span>
+              <span>
+                submitted by <span className="lowercase font-semibold text-ink">{submitterName}</span> · admin verified
+              </span>
               <button className="hover:text-ink flex items-center gap-1 transition-colors">
                 <ExternalLink className="w-3 h-3" /> Report info
               </button>

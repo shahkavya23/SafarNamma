@@ -29,6 +29,7 @@ export interface Place {
   map_link?: string ;
   is_approved?: boolean;
   submitted_by_email?: string | null;
+  submitted_by_name?: string | null;
   submission_status?: string | null;
   
   // (We'll keep a few of the old ones optional so React doesn't complain elsewhere for now)

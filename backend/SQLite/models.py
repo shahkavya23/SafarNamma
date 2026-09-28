@@ -1,6 +1,7 @@
+import re
 from typing import Required
 from sqlalchemy import Column , Integer , String , Float , Boolean , Text , DateTime , ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, foreign, remote
 from datetime import datetime 
 from server.database import Base 
 
@@ -60,6 +61,25 @@ class Destination(Base):
     transport_options = Column(String, nullable=True)
     nearby_facilities = Column(String, nullable=True)
     is_popular_weekend = Column(Boolean, default=False)
+
+    submitter = relationship(
+        "User",
+        primaryjoin="foreign(Destination.submitted_by_email) == remote(User.email)",
+        viewonly=True,
+        uselist=False,
+    )
+
+    @property
+    def submitted_by_name(self):
+        if self.submitter and self.submitter.name:
+            return self.submitter.name
+        if self.submitted_by_email:
+            local = self.submitted_by_email.split('@')[0]
+            parts = local.split('.')
+            if len(parts) > 1 and re.match(r'^\d{2}[a-z]{3}\d+', parts[-1], re.I):
+                return parts[0]
+            return local.replace('.', ' ').replace('_', ' ')
+        return None
 
 
 
