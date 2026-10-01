@@ -25,7 +25,8 @@ GOOGLE_CLIENT_ID = os.getenv(
     "726734847336-buqe2f9gr52p1dap3ha1ng6poqpj4oln.apps.googleusercontent.com",
 )
 
-ALLOWED_EMAIL_DOMAIN = "@sst.scaler.com"
+# Anyone can sign in; trips (viewing, joining, hosting) are for SST students only
+STUDENT_EMAIL_DOMAIN = "@sst.scaler.com"
 
 _DEFAULT_ADMINS = (
     "shahkavya2307@gmail.com,"
@@ -52,10 +53,15 @@ def is_admin_email(email: str) -> bool:
     return email.strip().lower() in ADMIN_EMAILS
 
 
+def is_student_email(email: str) -> bool:
+    return email.strip().lower().endswith(STUDENT_EMAIL_DOMAIN) or is_admin_email(email)
+
+
 @dataclass
 class CurrentUser:
     email: str
     is_admin: bool
+    is_student: bool
 
 
 def _b64(data: bytes) -> str:
@@ -103,11 +109,6 @@ def verify_google_credential(credential: str) -> str:
     email = (info.get("email") or "").lower()
     if not email or not info.get("email_verified"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Your Google email is not verified.")
-    if not email.endswith(ALLOWED_EMAIL_DOMAIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. Please use your @sst.scaler.com email address.",
-        )
     return email
 
 
@@ -117,7 +118,7 @@ def _user_from_header(authorization: Optional[str]) -> Optional[CurrentUser]:
     email = _read_session_token(authorization[7:].strip())
     if not email:
         return None
-    return CurrentUser(email=email, is_admin=is_admin_email(email))
+    return CurrentUser(email=email, is_admin=is_admin_email(email), is_student=is_student_email(email))
 
 
 def get_optional_user(authorization: Optional[str] = Header(default=None)) -> Optional[CurrentUser]:
@@ -138,4 +139,13 @@ def get_current_user(authorization: Optional[str] = Header(default=None)) -> Cur
 def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     if not user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required.")
+    return user
+
+
+def require_student(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    if not user.is_student:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Trips are only open to SST students. Sign in with your @sst.scaler.com email.",
+        )
     return user

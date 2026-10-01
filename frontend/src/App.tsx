@@ -39,12 +39,12 @@ function App() {
               </ProtectedRoute>
             } />
             <Route path="groups/:id" element={
-              <ProtectedRoute>
+              <ProtectedRoute requireStudent>
                 <GroupDetailsPage />
               </ProtectedRoute>
             } />
             <Route path="groups/:id/story" element={
-              <ProtectedRoute>
+              <ProtectedRoute requireStudent>
                 <TripStoryPage />
               </ProtectedRoute>
             } />

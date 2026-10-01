@@ -234,7 +234,7 @@ const HowItWorks = () => {
 
 export const GroupsPage = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isStudent, logout } = useAuth();
   const reduced = useReducedMotion();
   const [searchParams, setSearchParams] = useSearchParams();
   const destinationIdParam = searchParams.get('destinationId');
@@ -249,6 +249,7 @@ export const GroupsPage = () => {
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isHostLockedOpen, setIsHostLockedOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [showErrors, setShowErrors] = useState(false);
@@ -332,9 +333,21 @@ export const GroupsPage = () => {
     };
   }, [isModalOpen]);
 
+  useEffect(() => {
+    if (!isHostLockedOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setIsHostLockedOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isHostLockedOpen]);
+
   const handleOpenModal = () => {
     if (!isAuthenticated) {
       navigate('/login');
+      return;
+    }
+    // Hosting is for SST students; other accounts get a short notice instead of the sheet
+    if (!isStudent) {
+      setIsHostLockedOpen(true);
       return;
     }
     const initialDest = destinationIdParam || (places[0]?.id ? places[0].id.toString() : '');
@@ -1101,6 +1114,49 @@ export const GroupsPage = () => {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══ Hosting locked (non-SST account) ═══ */}
+      <AnimatePresence>
+        {isHostLockedOpen && (
+          <motion.div className="fixed inset-0 z-[60] flex items-center justify-center px-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <button className="absolute inset-0 bg-night/55 backdrop-blur-sm" onClick={() => setIsHostLockedOpen(false)} aria-label="Close" />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="host-locked-title"
+              initial={reduced ? false : { y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={reduced ? undefined : { y: 24, opacity: 0 }}
+              transition={{ duration: 0.4, ease: EASE }}
+              className="relative w-full max-w-md bg-sand rounded-[26px] p-7 sm:p-8 text-center shadow-2xl"
+            >
+              <span className="w-14 h-14 rounded-full bg-sage-soft text-sage-text flex items-center justify-center mx-auto mb-5">
+                <Lock className="w-6 h-6" />
+              </span>
+              <h2 id="host-locked-title" className="font-display text-2xl text-ink">Hosting is for SST students</h2>
+              <p className="text-sm text-muted mt-2">
+                Only @sst.scaler.com accounts can host or join trips. You're signed in as{' '}
+                <span className="font-semibold text-ink break-all">{user?.email}</span>.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
+                <button type="button" onClick={() => setIsHostLockedOpen(false)} className="btn-ghost">
+                  Got it
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    navigate('/login', { state: { from: { pathname: '/groups' } } });
+                  }}
+                  className="btn-primary"
+                >
+                  Switch account
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

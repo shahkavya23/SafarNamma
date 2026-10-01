@@ -37,13 +37,6 @@ export const LoginPage = () => {
     }
     const userEmail: string = (decodedToken.email || '').toLowerCase();
 
-    // Check the domain before the overlay goes up, so a wrong account gets a clear
-    // message instead of a spinner that covers it
-    if (!userEmail.endsWith('@sst.scaler.com')) {
-      setError(`${userEmail || 'This account'} isn't allowed. Please sign in with your @sst.scaler.com email.`);
-      return;
-    }
-
     setIsSigningIn(true);
     slowTimerRef.current = window.setTimeout(() => setIsSlow(true), SLOW_CONNECTION_HINT_MS);
 
@@ -103,9 +96,9 @@ export const LoginPage = () => {
           <div className="inline-flex items-center gap-1.5 bg-amber-50 text-[#F2A541] px-3 py-1 rounded-full text-xs font-bold mb-3">
             <Compass className="w-3.5 h-3.5" /> Explorer Portal
           </div>
-          <h2 className="text-3xl font-serif font-bold text-[#071E22]">Student Sign In</h2>
+          <h2 className="text-3xl font-serif font-bold text-[#071E22]">Sign In</h2>
           <p className="mt-2 text-sm text-gray-500">
-            Sign in with your SST Scaler student email to access expeditions and custom routes.
+            Sign in with any Google account to explore places. Trips are for SST students, so use your @sst.scaler.com email to join or host one.
           </p>
         </div>
 

@@ -14,9 +14,10 @@ from server.auth import (
     CurrentUser,
     create_session_token,
     get_current_user,
-    get_optional_user,
     is_admin_email,
+    is_student_email,
     require_admin,
+    require_student,
     verify_google_credential,
 )
 
@@ -59,7 +60,7 @@ async def health_check():
 def login_with_google(payload: schemas.GoogleLoginPayload):
     """Exchanges a verified Google ID token for a SafarNamma session token."""
     email = verify_google_credential(payload.credential)
-    return {"token": create_session_token(email), "email": email, "is_admin": is_admin_email(email)}
+    return {"token": create_session_token(email), "email": email, "is_admin": is_admin_email(email), "is_student": is_student_email(email)}
 
 
 # ── Live presence ──
@@ -357,7 +358,7 @@ def edit_destination(destination_id : int , destination_update: schemas.Destinat
 
 
 @app.post("/api/groups", response_model=schemas.TravelGroupResponse, status_code=status.HTTP_201_CREATED)
-def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(require_student)):
     group.organizer_email = user.email
     profile = db.query(models.User).filter(models.User.email == user.email).first()
     group.organizer_name = (profile.name if profile and profile.name else None) or group.organizer_name or user.email.split("@")[0]
@@ -434,9 +435,19 @@ def get_travel_groups(db: Session = Depends(get_db)):
     # Auto-expiration: a trip stays listed for 24 hours after it departs (shown as "just wrapped",
     # so the crew can still find it and make their story), then disappears
     cutoff = datetime.utcnow() - TRIP_LISTED_AFTER_DEPARTURE
-    return db.query(models.TravelGroup).filter(
+    groups = db.query(models.TravelGroup).filter(
         models.TravelGroup.trip_date > cutoff
     ).order_by(models.TravelGroup.created_at.desc()).all()
+
+    # The public list never carries the host's email or the group chat; those live behind
+    # GET /api/groups/{id}, which only SST students can open
+    result = []
+    for g in groups:
+        item = schemas.TravelGroupResponse.model_validate(g)
+        item.organizer_email = ""
+        item.chat_link = None
+        result.append(item)
+    return result
 
 
 @app.get("/api/me/trips", response_model=List[schemas.TravelGroupResponse])
@@ -497,8 +508,8 @@ def delete_travel_group(group_id: int, db: Session = Depends(get_db), user: Curr
 
 
 @app.get("/api/groups/{group_id}", response_model=schemas.TravelGroupResponse)
-def get_travel_group(group_id: int, db: Session = Depends(get_db), user: Optional[CurrentUser] = Depends(get_optional_user)):
-    user_email = user.email if user else None
+def get_travel_group(group_id: int, db: Session = Depends(get_db), user: CurrentUser = Depends(require_student)):
+    user_email = user.email
     group = db.query(models.TravelGroup).filter(models.TravelGroup.id == group_id).first()
     if not group:
         raise HTTPException(status_code=404, detail="Travel group not found")
@@ -529,7 +540,7 @@ def get_travel_group(group_id: int, db: Session = Depends(get_db), user: Optiona
 
 
 @app.post("/api/groups/{group_id}/requests", response_model=schemas.GroupRequestResponse, status_code=status.HTTP_201_CREATED)
-def request_to_join(group_id: int, request_data: schemas.GroupRequestCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+def request_to_join(group_id: int, request_data: schemas.GroupRequestCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(require_student)):
     request_data.user_email = user.email
 
     group = db.query(models.TravelGroup).filter(models.TravelGroup.id == group_id).first()

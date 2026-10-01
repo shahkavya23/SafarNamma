@@ -14,10 +14,16 @@ export const isAdminEmail = (email?: string): boolean => {
   return adminList.includes(email.trim().toLowerCase());
 };
 
+// Anyone can sign in; trips are only for SST students (admins count too)
+export const STUDENT_EMAIL_DOMAIN = '@sst.scaler.com';
+export const isStudentEmail = (email?: string): boolean =>
+  !!email && email.trim().toLowerCase().endsWith(STUDENT_EMAIL_DOMAIN);
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isStudent: boolean;
   login: (user: User, token: string) => Promise<void>;
   logout: () => void;
   updateUser : (updateUser:Partial<User>) => void ;//In typescript partial user is a built in utility type that make all properties optional .
@@ -148,12 +154,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 
   const isAdmin = !!user && user.role === 'admin' && isAdminEmail(user.email);
+  const isStudent = !!user && (isStudentEmail(user.email) || isAdmin);
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
+    <AuthContext.Provider value={{
+      user,
       isAuthenticated: !!user,
       isAdmin,
+      isStudent,
       login, 
       logout,
       updateUser

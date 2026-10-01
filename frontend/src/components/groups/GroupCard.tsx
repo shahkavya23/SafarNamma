@@ -97,11 +97,10 @@ export const GroupCard: React.FC<GroupCardProps> = ({ group, place, variant = 'p
         <div className="absolute inset-0 bg-gradient-to-t from-night/85 via-night/20 to-night/10" />
         <div className="absolute top-4 left-4 right-4 flex justify-between items-start gap-2">
           <StatusBadge group={group} onPhoto />
-          {group.chat_link && (
-            <span className="badge glass-dark" title="The group chat unlocks after the host approves you">
-              <Lock className="w-3 h-3" /> Private chat
-            </span>
-          )}
+          {/* Every trip has a chat; the list just never sends the link */}
+          <span className="badge glass-dark" title="The group chat unlocks after the host approves you">
+            <Lock className="w-3 h-3" /> Private chat
+          </span>
         </div>
         <div className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-3">
           <p className="flex items-center gap-1.5 text-sand text-sm font-semibold min-w-0">
