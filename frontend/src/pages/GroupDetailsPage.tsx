@@ -303,16 +303,18 @@ export const GroupDetailsPage = () => {
 
       <div className="max-w-7xl mx-auto px-page pt-24 pb-28 grid lg:grid-cols-[minmax(0,1fr)_380px] gap-14 lg:gap-20">
         <div className="min-w-0 space-y-20">
-          {/* The plan */}
-          <section>
-            <Reveal>
-              <p className="section-label mb-5">The plan</p>
-            </Reveal>
-            <SplitHeading className="text-display text-ink mb-8" style={{ fontSize: 'clamp(2rem, 4vw, 3.25rem)' }} parts={[{ text: "Here's how the" }, { text: 'day goes.', accent: true }]} />
-            <Reveal delay={0.1}>
-              <p className="text-body text-lg leading-[1.8] whitespace-pre-line max-w-[64ch]">{group.description}</p>
-            </Reveal>
-          </section>
+          {/* The plan (optional when hosting) */}
+          {group.description?.trim() && (
+            <section>
+              <Reveal>
+                <p className="section-label mb-5">The plan</p>
+              </Reveal>
+              <SplitHeading className="text-display text-ink mb-8" style={{ fontSize: 'clamp(2rem, 4vw, 3.25rem)' }} parts={[{ text: "Here's how the" }, { text: 'day goes.', accent: true }]} />
+              <Reveal delay={0.1}>
+                <p className="text-body text-lg leading-[1.8] whitespace-pre-line max-w-[64ch]">{group.description}</p>
+              </Reveal>
+            </section>
+          )}
 
           {/* Route */}
           {stops.length > 0 && (

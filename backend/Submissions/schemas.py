@@ -136,7 +136,8 @@ class TravelGroupCreate(BaseModel):
     description : str 
     trip_date : NaiveUtcDatetime 
     meeting_area : str 
-    max_members : int =  6
+    # 2–8 people including the host; same limits as the start-a-trip form
+    max_members : Annotated[int, Field(ge=2, le=8)] = 6
     chat_link : Optional[str] = None
     safety_notes : Optional[str] = None 
 

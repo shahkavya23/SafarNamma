@@ -27,6 +27,8 @@ import { photoProps } from '../utils/images';
 import { cn } from '../utils/cn';
 import { hoursMarker, hoursMode } from '../utils/hours';
 import { HoursModeToggles } from '../components/ui/Open247Toggle';
+import { Question } from '../components/ui/Question';
+import { revealProps } from '../utils/reveal';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -63,37 +65,6 @@ const REQUIRED_STEPS: { key: keyof FormState; label: string; done: (f: FormState
   { key: 'category', label: 'Category', done: (f) => Boolean(f.category) },
   { key: 'estimated_cost', label: 'Cost per person', done: (f) => isValidCost(f.estimated_cost) },
 ];
-
-/* ── One required question, revealed with a soft rise ── */
-const Question = ({
-  index,
-  title,
-  hint,
-  done,
-  children,
-}: {
-  index: number;
-  title: string;
-  hint?: string;
-  done: boolean;
-  children: React.ReactNode;
-}) => (
-  <div className="relative pl-12 sm:pl-14">
-    <span
-      className={cn(
-        'absolute left-0 top-0.5 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold transition-colors duration-500',
-        done ? 'bg-ink text-sand' : 'bg-accent-soft text-accent-text'
-      )}
-      aria-hidden
-    >
-      {done ? <Check className="w-4 h-4" /> : String(index).padStart(2, '0')}
-    </span>
-    <h3 className="font-display text-[1.45rem] sm:text-[1.65rem] leading-tight text-ink mb-1">{title}</h3>
-    {hint && <p className="text-sm text-muted mb-4">{hint}</p>}
-    {!hint && <div className="h-3" />}
-    {children}
-  </div>
-);
 
 export const SubmitPlacePage = () => {
   const { user } = useAuth();
@@ -240,12 +211,7 @@ export const SubmitPlacePage = () => {
     }
   };
 
-  const reveal = {
-    initial: reduced ? false : { opacity: 0, y: 16, height: 0 },
-    animate: { opacity: 1, y: 0, height: 'auto' },
-    exit: { opacity: 0, height: 0 },
-    transition: { duration: 0.6, ease: EASE },
-  } as const;
+  const reveal = revealProps(reduced);
 
   const preview = {
     id: 0,

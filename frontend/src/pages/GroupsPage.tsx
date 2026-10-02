@@ -26,8 +26,10 @@ import {
   MapPin,
   Minus,
   Check,
-  CalendarDays,
+  ChevronDown,
   Clock,
+  FileText,
+  Backpack,
 } from 'lucide-react';
 import type { Group, Place } from '../types';
 import { groupsApi, placesApi } from '../api/client';
@@ -35,6 +37,9 @@ import { useAuth } from '../context/AuthContext';
 import { GroupCard } from '../components/groups/GroupCard';
 import { StoryPromoAnnouncement } from '../components/groups/StoryPromo';
 import { PlacePicker } from '../components/groups/PlacePicker';
+import { TripDateTimePicker } from '../components/groups/TripDateTimePicker';
+import { Question } from '../components/ui/Question';
+import { revealProps } from '../utils/reveal';
 import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal } from '../components/motion/Reveal';
 import { Counter } from '../components/motion/Counter';
@@ -81,21 +86,14 @@ const PLAN_TEMPLATE = `5:30 AM – Meet and leave together
 Travel: bikes / carpool (split fuel)
 Who should join: `;
 
-/** Date → the `YYYY-MM-DDTHH:mm` string a datetime-local input expects, in local time. */
-const toLocalInput = (d: Date) => {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
-const daysFromNowAt = (days: number, hour: number, minute = 0) => {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  d.setHours(hour, minute, 0, 0);
-  return d;
-};
-
 const DEFAULT_GEAR = ['Water', 'ID card', 'Helmet'];
 const DEFAULT_SAFETY = 'Respect everyone in the group.';
+const TRIP_STEP_COUNT = 6;
+const SIZE_MIN = 2;
+const SIZE_MAX = 8;
+const SIZE_PRESETS = [2, 4, 6, 8];
+
+type TripExtra = 'plan' | 'bring';
 
 /** WhatsApp / Telegram invite links, matching the backend's check in create_travel_group. */
 const CHAT_LINK_RE = /^https?:\/\/(chat\.whatsapp\.com\/[A-Za-z0-9_-]+|wa\.me\/[0-9]+|t\.me\/[A-Za-z0-9_+-]+|telegram\.me\/[A-Za-z0-9_+-]+)/i;
@@ -103,18 +101,6 @@ const CHAT_LINK_RE = /^https?:\/\/(chat\.whatsapp\.com\/[A-Za-z0-9_-]+|wa\.me\/[
 /** Gear chips + free-text notes → the single safety_notes string the API stores. */
 const composeSafetyNotes = (gear: string[], notes: string) =>
   [gear.length ? `Bring: ${gear.join(', ')}.` : '', notes.trim()].filter(Boolean).join(' ') || null;
-
-const FormSection = ({ n, title, optional, last, children }: { n: number; title: string; optional?: boolean; last?: boolean; children: React.ReactNode }) => (
-  <section className={cn('relative pl-11 pb-9', !last && 'mb-1')}>
-    {!last && <span className="absolute left-[15px] top-9 bottom-0 w-px bg-line-strong" aria-hidden />}
-    <span className="absolute left-0 top-0 w-8 h-8 rounded-full bg-ink text-sand text-xs font-bold flex items-center justify-center">{n}</span>
-    <h3 className="font-display text-xl text-ink leading-8 mb-4 flex items-baseline gap-2">
-      {title}
-      {optional && <span className="font-body text-xs font-medium text-muted">Optional</span>}
-    </h3>
-    {children}
-  </section>
-);
 
 const FieldError = ({ children }: { children: React.ReactNode }) => (
   <p className="mt-1.5 text-xs font-bold text-[#A8321F]" role="alert">
@@ -256,6 +242,14 @@ export const GroupsPage = () => {
   const [gear, setGear] = useState<string[]>(DEFAULT_GEAR);
   const [openedAt, setOpenedAt] = useState(0);
   const lastPlaceId = useRef('');
+  // The title follows the chosen place until the host types their own
+  const [titleEdited, setTitleEdited] = useState(false);
+  // How many required questions are on screen; only grows, like Submit Place
+  const [revealed, setRevealed] = useState(1);
+  // Group size has a working default, but the host must choose it themselves
+  const [sizePicked, setSizePicked] = useState(false);
+  const [openExtra, setOpenExtra] = useState<TripExtra | null>(null);
+  const chatRef = useRef<HTMLInputElement>(null);
 
   // Form inputs
   const [formData, setFormData] = useState({
@@ -340,6 +334,15 @@ export const GroupsPage = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [isHostLockedOpen]);
 
+  // Changing the destination copies the place's name into the title, until the host writes their own
+  const titleFor = (destinationId: string, currentTitle: string) => {
+    if (titleEdited) return currentTitle;
+    const place = places.find((p) => String(p.id) === destinationId);
+    return place ? place.name.slice(0, TITLE_MAX) : '';
+  };
+  const setDestination = (destinationId: string) =>
+    setFormData((prev) => ({ ...prev, destination_id: destinationId, title: titleFor(destinationId, prev.title) }));
+
   const handleOpenModal = () => {
     if (!isAuthenticated) {
       navigate('/login');
@@ -350,11 +353,8 @@ export const GroupsPage = () => {
       setIsHostLockedOpen(true);
       return;
     }
-    const initialDest = destinationIdParam || (places[0]?.id ? places[0].id.toString() : '');
-    setFormData((prev) => ({
-      ...prev,
-      destination_id: initialDest,
-    }));
+    // No place is pre-picked unless the host came from a place page, so the title isn't copied from a random one
+    setDestination(destinationIdParam || formData.destination_id);
     setFormError('');
     setShowErrors(false);
     setOpenedAt(Date.now());
@@ -378,35 +378,46 @@ export const GroupsPage = () => {
 
   // Validation for the start-a-trip sheet
   const isCustomRoute = formData.destination_id === 'custom';
-  const destinationOk = isCustomRoute ? customStops.filter((s) => s.trim()).length >= 2 : !!formData.destination_id;
-  const titleOk = formData.title.trim().length >= 5;
-  const planOk = formData.description.trim().length >= 20;
+  const selectedPlace = isCustomRoute ? undefined : places.find((p) => String(p.id) === formData.destination_id);
+  const destinationOk = isCustomRoute ? customStops.filter((s) => s.trim()).length >= 2 : !!selectedPlace;
+  const titleOk = formData.title.trim().length >= 2;
   const dateOk = !!formData.trip_date && new Date(formData.trip_date).getTime() > openedAt;
   const meetingOk = formData.meeting_area.trim().length > 0;
+  const sizeOk = sizePicked;
   // Every trip needs a group chat. Same rule the backend enforces (main.py create_travel_group)
   const chatLink = formData.chat_link.trim();
   const chatOk = CHAT_LINK_RE.test(chatLink);
   const chatApp = chatOk ? (/whatsapp|wa\.me/i.test(chatLink) ? 'WhatsApp' : 'Telegram') : null;
-  const requiredChecks = [destinationOk, titleOk, planOk, dateOk, meetingOk, chatOk];
+  // The six required answers, in the order they are asked
+  const requiredChecks = [destinationOk, titleOk, dateOk, meetingOk, sizeOk, chatOk];
   const requiredDone = requiredChecks.filter(Boolean).length;
-  const datePresets = useMemo(
-    () => {
-      const dayAfter = daysFromNowAt(2, 8);
-      const dayAfterLabel = dayAfter.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-      return [
-        { label: `${dayAfterLabel}, 8 AM`, value: toLocalInput(dayAfter) },
-      ];
-    },
-    // Recompute each time the sheet opens so "tomorrow" stays accurate
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [openedAt],
-  );
+  const allRequiredDone = requiredDone === TRIP_STEP_COUNT;
+  const answeredInOrder = requiredChecks.indexOf(false) === -1 ? TRIP_STEP_COUNT : requiredChecks.indexOf(false);
+  const titleIsCopied = !titleEdited && !!selectedPlace && formData.title === selectedPlace.name.slice(0, TITLE_MAX);
+
+  // Each question appears once the previous one is answered, and stays visible afterwards
+  useEffect(() => {
+    setRevealed((r) => Math.max(r, Math.min(TRIP_STEP_COUNT, answeredInOrder + 1)));
+  }, [answeredInOrder]);
+
+  // Bring a newly revealed question into view inside the sheet
+  useEffect(() => {
+    if (!isModalOpen || revealed < 2) return;
+    const t = window.setTimeout(
+      () => document.querySelector(`[data-trip-step="${revealed}"]`)?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' }),
+      350,
+    );
+    return () => window.clearTimeout(t);
+  }, [revealed, isModalOpen, reduced]);
+
+  const reveal = revealProps(reduced);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
     if (requiredDone < requiredChecks.length) {
       setShowErrors(true);
+      setRevealed(TRIP_STEP_COUNT);
       requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="dialog"] .field-error')?.focus());
       return;
     }
@@ -429,8 +440,8 @@ export const GroupsPage = () => {
       const created = await groupsApi.createGroup({
         destination_id: finalDestId,
         custom_destination: finalCustomDest,
-        title: formData.title,
-        description: formData.description,
+        title: formData.title.trim(),
+        description: formData.description.trim(),
         trip_date: new Date(formData.trip_date).toISOString(),
         meeting_area: formData.meeting_area,
         max_members: Number(formData.max_members),
@@ -441,7 +452,7 @@ export const GroupsPage = () => {
       if (created) {
         setIsModalOpen(false);
         setFormData({
-          destination_id: places[0]?.id.toString() || '',
+          destination_id: '',
           title: '',
           description: '',
           trip_date: '',
@@ -453,6 +464,11 @@ export const GroupsPage = () => {
         setCustomStopCount(2);
         setCustomStops(['', '']);
         setGear(DEFAULT_GEAR);
+        setTitleEdited(false);
+        setSizePicked(false);
+        setRevealed(1);
+        setOpenExtra(null);
+        setShowErrors(false);
         await fetchGroupsAndPlaces();
       }
     } catch (err: any) {
@@ -789,8 +805,12 @@ export const GroupsPage = () => {
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-                <div className="h-1 bg-line" role="progressbar" aria-label="Required details filled" aria-valuemin={0} aria-valuemax={requiredChecks.length} aria-valuenow={requiredDone}>
-                  <motion.div className="h-full bg-accent" initial={false} animate={{ width: `${(requiredDone / requiredChecks.length) * 100}%` }} transition={{ duration: 0.4, ease: EASE }} />
+                <div className="flex gap-1 h-1" role="progressbar" aria-label="Required details filled" aria-valuemin={0} aria-valuemax={TRIP_STEP_COUNT} aria-valuenow={requiredDone}>
+                  {requiredChecks.map((done, i) => (
+                    <span key={i} className="flex-1 bg-line overflow-hidden">
+                      <motion.span className="block h-full bg-accent origin-left" initial={false} animate={{ scaleX: done ? 1 : 0 }} transition={{ duration: 0.5, ease: EASE }} />
+                    </span>
+                  ))}
                 </div>
               </div>
 
@@ -801,295 +821,414 @@ export const GroupsPage = () => {
                   </div>
                 )}
 
-                {/* ── 1 · Where ── */}
-                <FormSection n={1} title="Where are you going?">
-                  <div className="flex gap-2 mb-4" role="group" aria-label="Destination type">
-                    <Chip group="dest-mode" active={!isCustomRoute} onClick={() => setFormData({ ...formData, destination_id: lastPlaceId.current || String(places[0]?.id ?? '') })}>
-                      <MapPin className="w-3.5 h-3.5" /> One place
-                    </Chip>
-                    <Chip
-                      group="dest-mode"
-                      active={isCustomRoute}
-                      onClick={() => {
-                        if (!isCustomRoute) lastPlaceId.current = formData.destination_id;
-                        setFormData({ ...formData, destination_id: 'custom' });
-                      }}
-                    >
-                      <Route className="w-3.5 h-3.5" /> Multi-stop route
-                    </Chip>
-                  </div>
+                <div className="space-y-10 pb-10">
+                  {/* ── 1 · Where ── */}
+                  <div data-trip-step="1">
+                    <Question index={1} title="Where are you going?" hint="Pick a place from Explore, or build a route with stops." done={destinationOk}>
+                      <div className="flex gap-2 mb-4" role="group" aria-label="Destination type">
+                        <Chip group="dest-mode" active={!isCustomRoute} onClick={() => isCustomRoute && setDestination(lastPlaceId.current)}>
+                          <MapPin className="w-3.5 h-3.5" /> One place
+                        </Chip>
+                        <Chip
+                          group="dest-mode"
+                          active={isCustomRoute}
+                          onClick={() => {
+                            if (!isCustomRoute) lastPlaceId.current = formData.destination_id;
+                            setDestination('custom');
+                          }}
+                        >
+                          <Route className="w-3.5 h-3.5" /> Multi-stop route
+                        </Chip>
+                      </div>
 
-                  {!isCustomRoute ? (
-                    <PlacePicker id="trip-destination" places={places} value={formData.destination_id} onChange={(id) => setFormData({ ...formData, destination_id: id })} />
-                  ) : (
-                    <div className="rounded-3xl border border-line bg-paper p-5 space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span className="w-9 h-9 rounded-xl bg-accent-soft text-accent-text flex items-center justify-center">
-                            <Sparkles className="w-4 h-4" />
-                          </span>
-                          <div>
-                            <p className="text-sm font-bold text-ink">Your route</p>
-                            <p className="text-xs text-muted">Add the stops in order</p>
+                      {!isCustomRoute ? (
+                        <>
+                          <PlacePicker id="trip-destination" places={places} value={formData.destination_id} onChange={setDestination} />
+                          {showErrors && !destinationOk && <FieldError>Choose where the trip is going.</FieldError>}
+                        </>
+                      ) : (
+                        <div className="rounded-3xl border border-line bg-paper p-5 space-y-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <span className="w-9 h-9 rounded-xl bg-accent-soft text-accent-text flex items-center justify-center">
+                                <Sparkles className="w-4 h-4" />
+                              </span>
+                              <div>
+                                <p className="text-sm font-bold text-ink">Your route</p>
+                                <p className="text-xs text-muted">Add the stops in order</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 bg-sand p-1 rounded-full border border-line self-start sm:self-auto" role="group" aria-label="Number of stops">
+                              {[2, 3, 4, 5].map((num) => (
+                                <button
+                                  key={num}
+                                  type="button"
+                                  aria-pressed={customStopCount === num}
+                                  onClick={() => handleStopCountChange(num)}
+                                  className={cn('w-9 py-1.5 rounded-full text-xs font-bold transition-colors', customStopCount === num ? 'bg-ink text-sand' : 'text-body hover:text-ink')}
+                                >
+                                  {num}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1 bg-sand p-1 rounded-full border border-line self-start sm:self-auto" role="group" aria-label="Number of stops">
-                          {[2, 3, 4, 5].map((num) => (
-                            <button
-                              key={num}
-                              type="button"
-                              aria-pressed={customStopCount === num}
-                              onClick={() => handleStopCountChange(num)}
-                              className={cn('w-9 py-1.5 rounded-full text-xs font-bold transition-colors', customStopCount === num ? 'bg-ink text-sand' : 'text-body hover:text-ink')}
-                            >
-                              {num}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
 
-                      <ol className="relative space-y-3 pl-1">
-                        <span className="absolute left-[15px] top-4 bottom-4 border-l-2 border-dashed border-line-strong" aria-hidden />
-                        {customStops.map((stop, idx) => (
-                          <li key={idx} className="relative flex items-center gap-3">
-                            <span className="relative z-10 w-7 h-7 rounded-full bg-ink text-sand text-xs font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
+                          <ol className="relative space-y-3 pl-1">
+                            <span className="absolute left-[15px] top-4 bottom-4 border-l-2 border-dashed border-line-strong" aria-hidden />
+                            {customStops.map((stop, idx) => (
+                              <li key={idx} className="relative flex items-center gap-3">
+                                <span className="relative z-10 w-7 h-7 rounded-full bg-ink text-sand text-xs font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
+                                <input
+                                  type="text"
+                                  placeholder={STOP_PLACEHOLDERS[idx] ?? `Stop ${idx + 1}`}
+                                  value={stop}
+                                  onChange={(e) => handleStopChange(idx, e.target.value)}
+                                  className={cn('field !py-2.5', showErrors && idx < 2 && !stop.trim() && 'field-error')}
+                                  aria-label={`Stop ${idx + 1}`}
+                                />
+                              </li>
+                            ))}
+                          </ol>
+                          {showErrors && !destinationOk && <FieldError>Add at least 2 stops.</FieldError>}
+                        </div>
+                      )}
+                    </Question>
+                  </div>
+
+                  {/* ── 2 · Title ── */}
+                  <AnimatePresence initial={false}>
+                    {revealed >= 2 && (
+                      <motion.div key="title" data-trip-step="2" {...reveal} className="overflow-hidden">
+                        <Question index={2} title="What should we call it?" done={titleOk}>
+                          <div className="flex items-baseline justify-between">
+                            <label htmlFor="trip-title" className="field-label">
+                              Trip title
+                            </label>
+                            <span className="field-hint tabular-nums">
+                              {formData.title.length}/{TITLE_MAX}
+                            </span>
+                          </div>
+                          <input
+                            id="trip-title"
+                            type="text"
+                            maxLength={TITLE_MAX}
+                            placeholder={isCustomRoute ? 'e.g. Nandi Hills sunrise ride' : 'e.g. Sunrise jeep ride & chai at Nandi Hills'}
+                            value={formData.title}
+                            onChange={(e) => {
+                              // Clearing the field lets the next place picked fill it again
+                              setTitleEdited(e.target.value.trim() !== '');
+                              setFormData({ ...formData, title: e.target.value });
+                            }}
+                            onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+                            className={cn('field', showErrors && !titleOk && 'field-error')}
+                            aria-invalid={showErrors && !titleOk}
+                          />
+                          {showErrors && !titleOk ? (
+                            <FieldError>Give your trip a title.</FieldError>
+                          ) : (
+                            titleIsCopied && <p className="field-hint mt-1.5">Copied from the place. Edit it if you like.</p>
+                          )}
+                        </Question>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* ── 3 · When ── */}
+                  <AnimatePresence initial={false}>
+                    {revealed >= 3 && (
+                      <motion.div key="when" data-trip-step="3" {...reveal} className="overflow-hidden">
+                        <Question index={3} title="When are you leaving?" hint="Tap a day, then a time." done={dateOk}>
+                          <TripDateTimePicker value={formData.trip_date} onChange={(v) => setFormData((f) => ({ ...f, trip_date: v }))} invalid={!!formData.trip_date && !dateOk} />
+                          {((showErrors && !dateOk) || (!!formData.trip_date && !dateOk)) && (
+                            <FieldError>{formData.trip_date ? 'Pick a time in the future.' : 'Pick a day and a time.'}</FieldError>
+                          )}
+                        </Question>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* ── 4 · Meeting point ── */}
+                  <AnimatePresence initial={false}>
+                    {revealed >= 4 && (
+                      <motion.div key="meet" data-trip-step="4" {...reveal} className="overflow-hidden">
+                        <Question index={4} title="Where does everyone meet?" hint="A landmark people can find easily." done={meetingOk}>
+                          <div className="relative">
+                            <MapPin className="w-4 h-4 text-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                             <input
+                              id="trip-meeting"
                               type="text"
-                              placeholder={STOP_PLACEHOLDERS[idx] ?? `Stop ${idx + 1}`}
-                              value={stop}
-                              onChange={(e) => handleStopChange(idx, e.target.value)}
-                              className={cn('field !py-2.5', showErrors && idx < 2 && !stop.trim() && 'field-error')}
-                              aria-label={`Stop ${idx + 1}`}
+                              placeholder="e.g. Silk Board Metro, Gate 2"
+                              value={formData.meeting_area}
+                              onChange={(e) => setFormData({ ...formData, meeting_area: e.target.value })}
+                              onKeyDown={(e) => {
+                                // Enter moves to the next question instead of submitting half a form
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  chatRef.current?.focus();
+                                }
+                              }}
+                              className={cn('field !pl-10', showErrors && !meetingOk && 'field-error')}
+                              aria-label="Meeting point"
+                              aria-invalid={showErrors && !meetingOk}
                             />
-                          </li>
-                        ))}
-                      </ol>
-                      {showErrors && !destinationOk && <FieldError>Add at least 2 stops.</FieldError>}
-                    </div>
+                          </div>
+                          {showErrors && !meetingOk && <FieldError>Where should everyone meet?</FieldError>}
+                        </Question>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* ── 5 · Group size ── */}
+                  <AnimatePresence initial={false}>
+                    {revealed >= 5 && (
+                      <motion.div key="size" data-trip-step="5" {...reveal} className="overflow-hidden">
+                        <Question index={5} title="How many people can join?" hint="Including you. 2 to 8 people." done={sizeOk}>
+                          <div className="flex flex-wrap gap-2 mb-3" role="radiogroup" aria-label="Group size">
+                            {SIZE_PRESETS.map((n) => {
+                              const active = sizePicked && formData.max_members === n;
+                              return (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={active}
+                                  onClick={() => {
+                                    setSizePicked(true);
+                                    setFormData({ ...formData, max_members: n });
+                                  }}
+                                  className={cn(
+                                    'px-4 py-2 rounded-full border text-sm font-semibold tabular-nums transition-colors',
+                                    active ? 'bg-ink text-sand border-ink' : 'border-line-strong text-body hover:border-ink hover:text-ink',
+                                  )}
+                                >
+                                  {n} people
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="max-w-xs">
+                            <label htmlFor="trip-size" className="field-hint block mb-1.5">
+                              Or set an exact number
+                            </label>
+                            <div className={cn('field !p-1.5 flex items-center justify-between', showErrors && !sizeOk && 'field-error')}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSizePicked(true);
+                                  setFormData({ ...formData, max_members: Math.max(SIZE_MIN, formData.max_members - 1) });
+                                }}
+                                disabled={sizePicked && formData.max_members <= SIZE_MIN}
+                                className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
+                                aria-label="Fewer people"
+                              >
+                                <Minus className="w-4 h-4" />
+                              </button>
+                              <input
+                                id="trip-size"
+                                type="number"
+                                inputMode="numeric"
+                                min={SIZE_MIN}
+                                max={SIZE_MAX}
+                                placeholder="-"
+                                value={sizePicked ? formData.max_members : ''}
+                                onChange={(e) => {
+                                  setSizePicked(true);
+                                  setFormData({ ...formData, max_members: Math.max(SIZE_MIN, Math.min(SIZE_MAX, Number(e.target.value) || SIZE_MIN)) });
+                                }}
+                                className="w-14 text-center bg-transparent font-bold text-lg text-ink tabular-nums placeholder:text-muted focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSizePicked(true);
+                                  setFormData({ ...formData, max_members: Math.min(SIZE_MAX, formData.max_members + 1) });
+                                }}
+                                disabled={sizePicked && formData.max_members >= SIZE_MAX}
+                                className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
+                                aria-label="More people"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                          {showErrors && !sizeOk ? (
+                            <FieldError>Choose how many people can join.</FieldError>
+                          ) : (
+                            sizePicked && (
+                              <p className="field-hint mt-2.5">
+                                {formData.max_members - 1} {formData.max_members - 1 === 1 ? 'seat' : 'seats'} open for others
+                              </p>
+                            )
+                          )}
+                        </Question>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* ── 6 · Group chat ── */}
+                  <AnimatePresence initial={false}>
+                    {revealed >= 6 && (
+                      <motion.div key="chat" data-trip-step="6" {...reveal} className="overflow-hidden">
+                        <Question index={6} title="Paste your group chat link" hint="WhatsApp or Telegram. Only people you approve will see it." done={chatOk}>
+                          <div className="relative">
+                            <MessageCircle className="w-4 h-4 text-sage-text absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                              ref={chatRef}
+                              id="trip-chat"
+                              type="url"
+                              required
+                              placeholder="https://chat.whatsapp.com/… or https://t.me/…"
+                              value={formData.chat_link}
+                              onChange={(e) => setFormData({ ...formData, chat_link: e.target.value })}
+                              onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+                              className={cn('field !pl-10', (showErrors || chatLink) && !chatOk && 'field-error')}
+                              aria-label="WhatsApp or Telegram group link"
+                              aria-invalid={(showErrors || !!chatLink) && !chatOk}
+                            />
+                          </div>
+                          {(showErrors || chatLink) && !chatOk && (
+                            <FieldError>
+                              {chatLink
+                                ? 'Paste a WhatsApp (chat.whatsapp.com/…) or Telegram (t.me/…) invite link.'
+                                : 'Add your group chat link so approved members can join.'}
+                            </FieldError>
+                          )}
+                          {chatApp ? (
+                            <p className="mt-2 text-xs font-bold text-sage-text flex items-center gap-1.5">
+                              <Check className="w-3.5 h-3.5" /> {chatApp} group link
+                            </p>
+                          ) : (
+                            <p className="mt-2 text-xs text-muted flex items-center gap-1.5">
+                              <Lock className="w-3 h-3" /> Hidden until you approve someone.
+                            </p>
+                          )}
+                        </Question>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* ── Optional extras: only once the required answers are in ── */}
+                <AnimatePresence initial={false}>
+                  {allRequiredDone && (
+                    <motion.div key="extras" {...reveal} className="overflow-hidden">
+                      <div className="pt-8 pb-8 border-t border-line">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+                          <h3 className="font-display text-2xl text-ink">Want to add more?</h3>
+                          <span className="badge bg-sage-soft text-sage-text">All optional</span>
+                        </div>
+                        <p className="text-sm text-muted mb-6">You can publish now. A plan and a packing list help people decide to join.</p>
+
+                        <div className="space-y-3">
+                          {(
+                            [
+                              { key: 'plan', icon: FileText, title: 'The plan', blurb: 'Timings, how you’ll travel, who should join', filled: !!formData.description.trim() },
+                              { key: 'bring', icon: Backpack, title: 'What to bring & safety', blurb: gear.length ? `Bring: ${gear.join(', ')}` : 'Packing list and ground rules', filled: false },
+                            ] as { key: TripExtra; icon: typeof Users; title: string; blurb: string; filled: boolean }[]
+                          ).map((x) => {
+                            const open = openExtra === x.key;
+                            const Icon = x.icon;
+                            return (
+                              <div key={x.key} className={cn('rounded-2xl border transition-colors', open ? 'border-ink bg-paper' : 'border-line-strong bg-paper/60')}>
+                                <button type="button" onClick={() => setOpenExtra(open ? null : x.key)} aria-expanded={open} className="w-full flex items-center gap-4 p-4 text-left">
+                                  <span className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', x.filled ? 'bg-ink text-sand' : 'bg-stone text-ink')}>
+                                    {x.filled ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+                                  </span>
+                                  <span className="flex-1 min-w-0">
+                                    <span className="block font-semibold text-ink">{x.title}</span>
+                                    <span className="block text-sm text-muted truncate">{x.filled ? 'Added' : x.blurb}</span>
+                                  </span>
+                                  <ChevronDown className={cn('w-5 h-5 text-muted transition-transform duration-300', open && 'rotate-180')} />
+                                </button>
+
+                                <AnimatePresence initial={false}>
+                                  {open && (
+                                    <motion.div
+                                      key="panel"
+                                      initial={reduced ? false : { height: 0, opacity: 0 }}
+                                      animate={{ height: 'auto', opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.45, ease: EASE }}
+                                      className="overflow-hidden"
+                                    >
+                                      <div className="px-4 pb-5 pt-1">
+                                        {x.key === 'plan' && (
+                                          <>
+                                            <div className="flex items-baseline justify-between">
+                                              <label htmlFor="trip-description" className="field-label">
+                                                The plan
+                                              </label>
+                                              {!formData.description.trim() && (
+                                                <button type="button" onClick={() => setFormData({ ...formData, description: PLAN_TEMPLATE })} className="text-xs font-bold text-accent-text hover:underline mb-2">
+                                                  Use a template
+                                                </button>
+                                              )}
+                                            </div>
+                                            <textarea
+                                              id="trip-description"
+                                              rows={5}
+                                              maxLength={PLAN_MAX}
+                                              placeholder="Timings, how you'll travel, what you'll do there, who should join…"
+                                              value={formData.description}
+                                              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                              className="field resize-y min-h-[8rem] leading-relaxed"
+                                            />
+                                            <div className="flex justify-between mt-1.5 gap-3">
+                                              <span className="field-hint">A clear plan gets more join requests.</span>
+                                              <span className="field-hint tabular-nums shrink-0">
+                                                {formData.description.length}/{PLAN_MAX}
+                                              </span>
+                                            </div>
+                                          </>
+                                        )}
+
+                                        {x.key === 'bring' && (
+                                          <>
+                                            <p className="field-label">What to bring</p>
+                                            <div className="flex flex-wrap gap-1.5 mb-3">
+                                              {GEAR_PRESETS.map((g) => {
+                                                const on = gear.includes(g);
+                                                return (
+                                                  <button
+                                                    key={g}
+                                                    type="button"
+                                                    aria-pressed={on}
+                                                    onClick={() => setGear((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]))}
+                                                    className={cn(
+                                                      'px-2.5 py-1 rounded-full text-xs font-bold border transition-colors flex items-center gap-1',
+                                                      on ? 'bg-sage-soft text-sage-text border-sage/40' : 'border-line-strong text-body hover:border-ink hover:text-ink',
+                                                    )}
+                                                  >
+                                                    {on ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />} {g}
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+                                            <label htmlFor="trip-safety" className="field-label !mt-4">
+                                              Safety notes
+                                            </label>
+                                            <textarea
+                                              id="trip-safety"
+                                              rows={2}
+                                              placeholder="e.g. No drinking and riding. Stay with the group on the trail."
+                                              value={formData.safety_notes}
+                                              onChange={(e) => setFormData({ ...formData, safety_notes: e.target.value })}
+                                              className="field resize-none"
+                                            />
+                                          </>
+                                        )}
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </motion.div>
                   )}
-                </FormSection>
-
-                {/* ── 2 · The plan ── */}
-                <FormSection n={2} title="What's the plan?">
-                  <div className="space-y-5">
-                    <div>
-                      <div className="flex items-baseline justify-between">
-                        <label htmlFor="trip-title" className="field-label">
-                          Trip title
-                        </label>
-                        <span className="field-hint tabular-nums">
-                          {formData.title.length}/{TITLE_MAX}
-                        </span>
-                      </div>
-                      <input
-                        id="trip-title"
-                        type="text"
-                        maxLength={TITLE_MAX}
-                        placeholder="e.g. Sunrise jeep ride & chai at Nandi Hills"
-                        value={formData.title}
-                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                        className={cn('field', showErrors && !titleOk && 'field-error')}
-                        aria-invalid={showErrors && !titleOk}
-                      />
-                      {showErrors && !titleOk && <FieldError>Give your trip a title (at least 5 characters).</FieldError>}
-                    </div>
-
-                    <div>
-                      <div className="flex items-baseline justify-between">
-                        <label htmlFor="trip-description" className="field-label">
-                          The plan
-                        </label>
-                        {!formData.description.trim() && (
-                          <button type="button" onClick={() => setFormData({ ...formData, description: PLAN_TEMPLATE })} className="text-xs font-bold text-accent-text hover:underline mb-2">
-                            Use a template
-                          </button>
-                        )}
-                      </div>
-                      <textarea
-                        id="trip-description"
-                        rows={5}
-                        maxLength={PLAN_MAX}
-                        placeholder="Timings, how you'll travel, what you'll do there, who should join…"
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className={cn('field resize-y min-h-[8rem] leading-relaxed', showErrors && !planOk && 'field-error')}
-                        aria-invalid={showErrors && !planOk}
-                      />
-                      <div className="flex justify-between mt-1.5 gap-3">
-                        {showErrors && !planOk ? <FieldError>Tell people a bit more (at least 20 characters).</FieldError> : <span className="field-hint">A clear plan gets more join requests.</span>}
-                        <span className="field-hint tabular-nums shrink-0">
-                          {formData.description.length}/{PLAN_MAX}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </FormSection>
-
-                {/* ── 3 · When & where you meet ── */}
-                <FormSection n={3} title="When and where do you meet?">
-                  <div className="space-y-5">
-                    <div>
-                      <label htmlFor="trip-date" className="field-label">
-                        Date & time
-                      </label>
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {datePresets.map((d) => (
-                          <button
-                            key={d.label}
-                            type="button"
-                            aria-pressed={formData.trip_date === d.value}
-                            onClick={() => setFormData({ ...formData, trip_date: d.value })}
-                            className={cn('chip !py-1.5 !text-xs', formData.trip_date === d.value && '!bg-ink')}
-                          >
-                            <CalendarDays className="w-3.5 h-3.5" /> {d.label}
-                          </button>
-                        ))}
-                      </div>
-                      <input
-                        id="trip-date"
-                        type="datetime-local"
-                        min={toLocalInput(new Date())}
-                        value={formData.trip_date}
-                        onChange={(e) => setFormData({ ...formData, trip_date: e.target.value })}
-                        className={cn('field', showErrors && !dateOk && 'field-error')}
-                        aria-invalid={showErrors && !dateOk}
-                      />
-                      {showErrors && !dateOk && <FieldError>{formData.trip_date ? 'Pick a time in the future.' : 'Pick a date and time.'}</FieldError>}
-                    </div>
-                    <div>
-                      <label htmlFor="trip-meeting" className="field-label">
-                        Meeting point
-                      </label>
-                      <div className="relative">
-                        <MapPin className="w-4 h-4 text-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <input
-                          id="trip-meeting"
-                          type="text"
-                          placeholder="e.g. Silk Board Metro, Gate 2"
-                          value={formData.meeting_area}
-                          onChange={(e) => setFormData({ ...formData, meeting_area: e.target.value })}
-                          className={cn('field !pl-10', showErrors && !meetingOk && 'field-error')}
-                          aria-invalid={showErrors && !meetingOk}
-                        />
-                      </div>
-                      {showErrors && !meetingOk && <FieldError>Where should everyone meet?</FieldError>}
-                    </div>
-                  </div>
-                </FormSection>
-
-                {/* ── 4 · Group size ── */}
-                <FormSection n={4} title="Group size">
-                  <div className="max-w-xs">
-                    <label htmlFor="trip-size" className="field-label">
-                      How many people? <span className="font-medium text-muted">(incl. you)</span>
-                    </label>
-                    <div className="field !p-1.5 flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={() => setFormData({ ...formData, max_members: Math.max(2, formData.max_members - 1) })}
-                        disabled={formData.max_members <= 2}
-                        className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
-                        aria-label="Fewer people"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <input
-                        id="trip-size"
-                        type="number"
-                        inputMode="numeric"
-                        min="2"
-                        max="30"
-                        value={formData.max_members}
-                        onChange={(e) => setFormData({ ...formData, max_members: Math.max(2, Math.min(30, Number(e.target.value) || 2)) })}
-                        className="w-14 text-center bg-transparent font-bold text-lg text-ink tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setFormData({ ...formData, max_members: Math.min(30, formData.max_members + 1) })}
-                        disabled={formData.max_members >= 30}
-                        className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
-                        aria-label="More people"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <p className="field-hint mt-2.5">
-                      {formData.max_members - 1} {formData.max_members - 1 === 1 ? 'seat' : 'seats'} open for others
-                    </p>
-                  </div>
-                </FormSection>
-
-                {/* ── 5 · Chat & safety ── */}
-                <FormSection n={5} title="Group chat and safety" last>
-                  <div className="space-y-5">
-                    <div className="rounded-3xl bg-paper border border-line p-5">
-                      <label htmlFor="trip-chat" className="field-label !flex items-center gap-2">
-                        <MessageCircle className="w-4 h-4 text-sage-text" /> WhatsApp or Telegram group link
-                      </label>
-                      <p className="text-xs text-muted mb-3 flex items-center gap-1.5">
-                        <Lock className="w-3 h-3" /> Required. Only people you approve will see it.
-                      </p>
-                      <input
-                        id="trip-chat"
-                        type="url"
-                        required
-                        placeholder="https://chat.whatsapp.com/… or https://t.me/…"
-                        value={formData.chat_link}
-                        onChange={(e) => setFormData({ ...formData, chat_link: e.target.value })}
-                        className={cn('field', (showErrors || chatLink) && !chatOk && 'field-error')}
-                        aria-invalid={(showErrors || !!chatLink) && !chatOk}
-                      />
-                      {(showErrors || chatLink) && !chatOk && (
-                        <FieldError>
-                          {chatLink
-                            ? 'Paste a WhatsApp (chat.whatsapp.com/…) or Telegram (t.me/…) invite link.'
-                            : 'Add your group chat link so approved members can join.'}
-                        </FieldError>
-                      )}
-                      {chatApp && (
-                        <p className="mt-2 text-xs font-bold text-sage-text flex items-center gap-1.5">
-                          <Check className="w-3.5 h-3.5" /> {chatApp} group link
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <p className="field-label">
-                        What to bring
-                      </p>
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        {GEAR_PRESETS.map((g) => {
-                          const on = gear.includes(g);
-                          return (
-                            <button
-                              key={g}
-                              type="button"
-                              aria-pressed={on}
-                              onClick={() => setGear((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]))}
-                              className={cn(
-                                'px-2.5 py-1 rounded-full text-xs font-bold border transition-colors flex items-center gap-1',
-                                on ? 'bg-sage-soft text-sage-text border-sage/40' : 'border-line-strong text-body hover:border-ink hover:text-ink',
-                              )}
-                            >
-                              {on ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />} {g}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <label htmlFor="trip-safety" className="field-label !mt-4">
-                        Safety notes
-                      </label>
-                      <textarea
-                        id="trip-safety"
-                        rows={2}
-                        placeholder="e.g. No drinking and riding. Stay with the group on the trail."
-                        value={formData.safety_notes}
-                        onChange={(e) => setFormData({ ...formData, safety_notes: e.target.value })}
-                        className="field resize-none"
-                      />
-                    </div>
-                  </div>
-                </FormSection>
+                </AnimatePresence>
 
                 <div className="sticky bottom-0 z-20 -mx-6 sm:-mx-8 px-6 sm:px-8 py-4 bg-sand/95 backdrop-blur border-t border-line flex items-center gap-3">
                   <p className="text-xs text-muted mr-auto min-w-0 hidden sm:block">

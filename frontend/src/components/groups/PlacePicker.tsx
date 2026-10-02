@@ -7,7 +7,7 @@ import { cn } from '../../utils/cn';
 
 const thumb = (p: Place) => optimizeImageUrl(p.image_url, 160) || fallbackPhoto(p.id);
 
-/* Searchable place picker: shows the chosen place as a card, opens into a filterable list with thumbnails. */
+/* Searchable place picker: shows the chosen place as a card, opens (in place, pushing content down) into a filterable list with thumbnails. */
 export const PlacePicker = ({ id, places, value, onChange }: { id: string; places: Place[]; value: string; onChange: (id: string) => void }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -15,6 +15,7 @@ export const PlacePicker = ({ id, places, value, onChange }: { id: string; place
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const selected = places.find((p) => String(p.id) === value);
   const results = useMemo(() => {
@@ -25,10 +26,15 @@ export const PlacePicker = ({ id, places, value, onChange }: { id: string; place
 
   useEffect(() => {
     if (!open) return;
-    searchRef.current?.focus();
+    searchRef.current?.focus({ preventScroll: true });
+    // The list opens in place, so bring all of it above the sheet's sticky footer once it has expanded
+    const t = window.setTimeout(() => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 220);
     const onDown = (e: MouseEvent) => !rootRef.current?.contains(e.target as Node) && setOpen(false);
     document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener('mousedown', onDown);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -95,11 +101,12 @@ export const PlacePicker = ({ id, places, value, onChange }: { id: string; place
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.18 }}
-            className="absolute z-20 left-0 right-0 mt-2 rounded-2xl bg-paper border border-line-strong shadow-2xl overflow-hidden"
+            ref={panelRef}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mt-2 rounded-2xl bg-paper border border-line-strong shadow-lg overflow-hidden scroll-mb-28"
           >
             <div className="p-2 border-b border-line">
               <div className="relative">
