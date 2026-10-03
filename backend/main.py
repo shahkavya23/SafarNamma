@@ -473,6 +473,97 @@ def get_my_trips(db: Session = Depends(get_db), user: CurrentUser = Depends(get_
     return result
 
 
+@app.patch("/api/groups/{group_id}", response_model=schemas.TravelGroupResponse)
+def update_travel_group(
+    group_id: int,
+    payload: schemas.TravelGroupUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user)
+):
+    group = db.query(models.TravelGroup).filter(models.TravelGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Travel group not found")
+
+    # 1. Authorization: Only the organizer can edit this group
+    if group.organizer_email.lower() != user.email.lower():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied: Only the group organizer can edit this trip."
+        )
+
+    # 2. 12-Hour Cutoff: Trips cannot be modified within 12 hours of departure
+    now_utc = datetime.utcnow()
+    time_remaining = group.trip_date - now_utc
+    if time_remaining < timedelta(hours=12):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Editing is locked: Trip details cannot be modified within 12 hours of departure."
+        )
+
+    # If updating trip_date, the new departure must also be at least 12 hours in the future
+    if payload.trip_date is not None:
+        new_time_remaining = payload.trip_date - now_utc
+        if new_time_remaining < timedelta(hours=12):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid departure time: The new trip date must be at least 12 hours from now."
+            )
+        group.trip_date = payload.trip_date
+
+    # 3. Route destination immutability rule:
+    # Multi-route trips contain stop arrows (➔, ->, →). Single-route trips cannot change destination.
+    is_multi_route = bool(
+        group.custom_destination and any(arrow in group.custom_destination for arrow in ["➔", "->", "→"])
+    )
+
+    if not is_multi_route:
+        # For single-route trips, destination change is forbidden
+        if (payload.destination_id is not None and payload.destination_id != group.destination_id) or \
+           (payload.custom_destination is not None and payload.custom_destination != group.custom_destination):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The destination of a single-stop trip cannot be changed. Only multi-route trips allow updating route stops."
+            )
+    else:
+        # Multi-route trip: allow updating custom_destination
+        if payload.custom_destination is not None:
+            group.custom_destination = payload.custom_destination.strip()
+
+    # 4. WhatsApp / Telegram Chat Link validation
+    if payload.chat_link is not None:
+        chat_link = payload.chat_link.strip()
+        valid_chat_regex = r"^https?://(chat\.whatsapp\.com/[A-Za-z0-9_-]+|wa\.me/[0-9]+|t\.me/[A-Za-z0-9_+-]+|telegram\.me/[A-Za-z0-9_+-]+)"
+        if not re.match(valid_chat_regex, chat_link, re.IGNORECASE):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Security validation failed: Chat link must be a legitimate WhatsApp (chat.whatsapp.com) or Telegram (t.me) invite link."
+            )
+        group.chat_link = chat_link
+
+    # 5. Max members consistency: Cannot reduce below current joined members
+    if payload.max_members is not None:
+        if payload.max_members < group.current_members:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot reduce capacity to {payload.max_members}. There are already {group.current_members} members in this group."
+            )
+        group.max_members = payload.max_members
+
+    # 6. Update general descriptive fields
+    if payload.title is not None:
+        group.title = payload.title.strip()
+    if payload.description is not None:
+        group.description = payload.description.strip()
+    if payload.meeting_area is not None:
+        group.meeting_area = payload.meeting_area.strip()
+    if payload.safety_notes is not None:
+        group.safety_notes = payload.safety_notes.strip()
+
+    db.commit()
+    db.refresh(group)
+    return group
+
+
 @app.delete("/api/groups/{group_id}", status_code=status.HTTP_200_OK)
 def delete_travel_group(group_id: int, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     organizer_email = user.email

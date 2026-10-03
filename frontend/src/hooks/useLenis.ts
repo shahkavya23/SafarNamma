@@ -40,5 +40,7 @@ export function setScrollLocked(locked: boolean) {
     if (locked) lenis.stop();
     else lenis.start();
   }
+  // Both roots: html carries overflow-x: clip, so the viewport takes its overflow from html, not body
+  document.documentElement.style.overflow = locked ? 'hidden' : '';
   document.body.style.overflow = locked ? 'hidden' : '';
 }

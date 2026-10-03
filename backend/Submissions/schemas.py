@@ -141,6 +141,19 @@ class TravelGroupCreate(BaseModel):
     chat_link : Optional[str] = None
     safety_notes : Optional[str] = None 
 
+class TravelGroupUpdate(BaseModel):
+    title : Optional[str] = None 
+    description : Optional[str] = None 
+    trip_date : Optional[NaiveUtcDatetime] = None 
+    meeting_area : Optional[str] = None 
+    max_members : Annotated[int | None , Field(ge = 2 , le = 8)] = None 
+    chat_link : Optional[str] = None 
+    safety_notes : Optional[str] = None 
+    custom_destination : Optional[str] = None 
+    destination_id :  Optional[int] = None 
+
+
+
 class TravelGroupResponse(BaseModel):
 
     id : int 

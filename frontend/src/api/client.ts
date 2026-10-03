@@ -273,6 +273,25 @@ export const groupsApi = {
       console.error("Failed to delete group", error);
       throw error;
     }
+  },
+
+  // 8. Organizer updates group settings (enforcing 12-hour cutoff and route immutability)
+  updateGroup: async (groupId: number | string, data: Partial<Group>): Promise<Group> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/groups/${groupId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(errorMessage(err.detail, 'Failed to update group'));
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to update group", error);
+      throw error;
+    }
   }
 };
 

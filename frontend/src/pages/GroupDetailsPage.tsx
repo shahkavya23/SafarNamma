@@ -21,6 +21,7 @@ import {
   Lock,
   PartyPopper,
   Route,
+  Edit3,
 } from 'lucide-react';
 import type { Group, GroupRequest, Place } from '../types';
 import { groupsApi, placesApi } from '../api/client';
@@ -30,7 +31,9 @@ import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal, RevealItem } from '../components/motion/Reveal';
 import { PlaceCard } from '../components/places/PlaceCard';
 import { fallbackPhoto } from '../utils/images';
-import { groupDestination, isPastTrip, isStoryUnlocked, routeStops, seatsLeft, storyUnlockTime } from '../utils/groups';
+import { groupDestination, isPastTrip, isStoryUnlocked, routeStops, seatsLeft, storyUnlockTime, isTripEditable, editWindowLabel } from '../utils/groups';
+import { EditGroupModal } from '../components/groups/EditGroupModal';
+import { ShareTrip } from '../components/groups/ShareTrip';
 import { cn } from '../utils/cn';
 
 export const GroupDetailsPage = () => {
@@ -49,6 +52,7 @@ export const GroupDetailsPage = () => {
   const [actionMessage, setActionMessage] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const fetchDetails = async () => {
     if (!id) return;
@@ -266,6 +270,11 @@ export const GroupDetailsPage = () => {
             <div className="h-2 rounded-full bg-white/15 overflow-hidden">
               <div className="h-full rounded-full bg-accent transition-[width] duration-1000" style={{ width: `${fill}%` }} />
             </div>
+            {!past && (
+              <div className="mt-7">
+                <ShareTrip group={group} destination={destination} />
+              </div>
+            )}
           </div>
         }
       />
@@ -459,6 +468,23 @@ export const GroupDetailsPage = () => {
                     </a>
                   )}
 
+                  {/* Organizer Edit Trip Action */}
+                  <div className="pt-2">
+                    <button
+                      onClick={() => setIsEditModalOpen(true)}
+                      className={cn(
+                        'btn-ghost w-full !border-line hover:!border-ink text-ink font-semibold flex items-center justify-center gap-2',
+                        !isTripEditable(group) && 'opacity-60 cursor-not-allowed'
+                      )}
+                    >
+                      <Edit3 className="w-4 h-4 text-accent" />
+                      Edit trip settings
+                    </button>
+                    <p className="text-[11px] text-muted text-center mt-1.5 leading-relaxed">
+                      {editWindowLabel(group)}
+                    </p>
+                  </div>
+
                   {/* Organizer delete action with 2-hour cooldown notice */}
                   <div className="pt-3 mt-2 border-t border-line">
                     <button onClick={handleDeleteGroup} disabled={isDeleting} className="btn-ghost w-full !text-[#B42318] !border-[#B42318]/30 hover:!bg-[#F8DEDA]/50">
@@ -544,6 +570,20 @@ export const GroupDetailsPage = () => {
           </Reveal>
         </aside>
       </div>
+
+      {/* Organizer Edit Modal */}
+      {group && (
+        <EditGroupModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          group={group}
+          destinationName={destination}
+          onUpdated={(updatedGroup) => {
+            setGroup(updatedGroup);
+            setActionMessage('Trip details updated.');
+          }}
+        />
+      )}
     </div>
   );
 };
