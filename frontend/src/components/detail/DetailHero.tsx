@@ -2,6 +2,7 @@ import { useRef, type ReactNode } from 'react';
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import { Expand } from 'lucide-react';
 import { optimizeImageUrl } from '../../utils/images';
+import { cn } from '../../utils/cn';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -15,6 +16,8 @@ interface DetailHeroProps {
   actions?: ReactNode;
   photoLabel?: string;
   onOpenPhotos?: () => void;
+  /** A shorter band for pages with little hero text; a lone photo then fills its column. */
+  compact?: boolean;
 }
 
 /* ─── Shared hero for place and group detail pages ───
@@ -22,7 +25,7 @@ interface DetailHeroProps {
    and a two-photo collage on the right that wipes open and drifts with the scroll.
    Framing the photos (instead of stretching one full-bleed) keeps portrait and
    low-resolution uploads looking sharp. */
-export const DetailHero = ({ photos, fallback, eyebrow, title, meta, actions, photoLabel, onOpenPhotos }: DetailHeroProps) => {
+export const DetailHero = ({ photos, fallback, eyebrow, title, meta, actions, photoLabel, onOpenPhotos, compact }: DetailHeroProps) => {
   const ref = useRef<HTMLElement>(null);
   const reduced = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
@@ -48,7 +51,7 @@ export const DetailHero = ({ photos, fallback, eyebrow, title, meta, actions, ph
         };
 
   return (
-    <section ref={ref} className="relative overflow-hidden bg-night grain pt-32 lg:pt-36 pb-40 lg:pb-44">
+    <section ref={ref} className={cn('relative overflow-hidden bg-night grain', compact ? 'pt-28 lg:pt-32 pb-32 lg:pb-36' : 'pt-32 lg:pt-36 pb-40 lg:pb-44')}>
       {/* Ambient light from the photo itself */}
       <motion.img
         src={lead}
@@ -70,8 +73,8 @@ export const DetailHero = ({ photos, fallback, eyebrow, title, meta, actions, ph
           {actions && <div className="flex flex-wrap gap-3 mt-9 animate-fade-up delay-500">{actions}</div>}
         </motion.div>
 
-        <div className="lg:col-span-6 relative h-[380px] sm:h-[480px] lg:h-[560px]">
-          <motion.div className="absolute right-0 top-0 w-[82%] h-[84%]" style={reduced ? undefined : { y: leadY }}>
+        <div className={cn('lg:col-span-6 relative', compact ? 'h-[260px] sm:h-[340px] lg:h-[400px]' : 'h-[380px] sm:h-[480px] lg:h-[560px]')}>
+          <motion.div className={cn('absolute right-0 top-0', compact && !front ? 'w-full h-full' : 'w-[82%] h-[84%]')} style={reduced ? undefined : { y: leadY }}>
             <motion.div {...wipe(0.15)} className="w-full h-full rounded-[32px] overflow-hidden bg-night-soft shadow-[0_40px_80px_-30px_rgba(0,0,0,0.7)]">
               <img src={lead} alt="" referrerPolicy="no-referrer" onError={onError} fetchPriority="high" className="w-full h-full object-cover" />
             </motion.div>
@@ -96,7 +99,7 @@ export const DetailHero = ({ photos, fallback, eyebrow, title, meta, actions, ph
 };
 
 /** A paper card of key facts that overlaps the bottom of the DetailHero. */
-export const FactsCard = ({ facts }: { facts: { icon: React.ComponentType<{ className?: string }>; label: string; value: ReactNode }[] }) => {
+export const FactsCard = ({ facts }: { facts: { icon: React.ComponentType<{ className?: string }>; label: string; value: ReactNode; accent?: boolean }[] }) => {
   const reduced = useReducedMotion();
   return (
     <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-page -mt-24">
@@ -106,13 +109,13 @@ export const FactsCard = ({ facts }: { facts: { icon: React.ComponentType<{ clas
         variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.5 } } }}
         className="rounded-[28px] overflow-hidden border border-line bg-[#E3DACB] card-shadow-hover flex flex-wrap gap-px"
       >
-        {facts.map(({ icon: Icon, label, value }) => (
+        {facts.map(({ icon: Icon, label, value, accent }) => (
           <motion.div
             key={label}
             variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: EASE } } }}
             className="bg-paper p-5 sm:p-6 flex gap-3.5 flex-1 basis-[150px] sm:basis-[210px]"
           >
-            <span className="w-10 h-10 rounded-xl bg-stone text-ink flex items-center justify-center shrink-0">
+            <span className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', accent ? 'bg-accent-soft text-accent-text' : 'bg-stone text-ink')}>
               <Icon className="w-4 h-4" />
             </span>
             <div className="min-w-0">

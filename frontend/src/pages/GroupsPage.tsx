@@ -90,7 +90,6 @@ const DEFAULT_GEAR = ['Water', 'ID card', 'Helmet'];
 const DEFAULT_SAFETY = 'Respect everyone in the group.';
 const TRIP_STEP_COUNT = 6;
 const SIZE_MIN = 2;
-const SIZE_MAX = 8;
 const SIZE_PRESETS = [2, 4, 6, 8];
 
 type TripExtra = 'plan' | 'bring';
@@ -383,7 +382,7 @@ export const GroupsPage = () => {
   const titleOk = formData.title.trim().length >= 2;
   const dateOk = !!formData.trip_date && new Date(formData.trip_date).getTime() > openedAt;
   const meetingOk = formData.meeting_area.trim().length > 0;
-  const sizeOk = sizePicked;
+  const sizeOk = sizePicked && formData.max_members >= SIZE_MIN;
   // Every trip needs a group chat. Same rule the backend enforces (main.py create_travel_group)
   const chatLink = formData.chat_link.trim();
   const chatOk = CHAT_LINK_RE.test(chatLink);
@@ -982,7 +981,7 @@ export const GroupsPage = () => {
                   <AnimatePresence initial={false}>
                     {revealed >= 5 && (
                       <motion.div key="size" data-trip-step="5" {...reveal} className="overflow-hidden">
-                        <Question index={5} title="How many people can join?" hint="Including you. 2 to 8 people." done={sizeOk}>
+                        <Question index={5} title="How many people can join?" hint="Including you. At least 2 people." done={sizeOk}>
                           <div className="flex flex-wrap gap-2 mb-3" role="radiogroup" aria-label="Group size">
                             {SIZE_PRESETS.map((n) => {
                               const active = sizePicked && formData.max_members === n;
@@ -1028,22 +1027,24 @@ export const GroupsPage = () => {
                                 type="number"
                                 inputMode="numeric"
                                 min={SIZE_MIN}
-                                max={SIZE_MAX}
                                 placeholder="-"
-                                value={sizePicked ? formData.max_members : ''}
+                                value={sizePicked ? formData.max_members || '' : ''}
                                 onChange={(e) => {
+                                  // Kept as typed so "12" isn't bumped mid-keystroke; the minimum is applied on blur
                                   setSizePicked(true);
-                                  setFormData({ ...formData, max_members: Math.max(SIZE_MIN, Math.min(SIZE_MAX, Number(e.target.value) || SIZE_MIN)) });
+                                  setFormData({ ...formData, max_members: Math.max(0, Math.floor(Number(e.target.value)) || 0) });
                                 }}
-                                className="w-14 text-center bg-transparent font-bold text-lg text-ink tabular-nums placeholder:text-muted focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                onBlur={() => {
+                                  if (sizePicked && formData.max_members < SIZE_MIN) setFormData({ ...formData, max_members: SIZE_MIN });
+                                }}
+                                className="w-20 text-center bg-transparent font-bold text-lg text-ink tabular-nums placeholder:text-muted focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                               />
                               <button
                                 type="button"
                                 onClick={() => {
                                   setSizePicked(true);
-                                  setFormData({ ...formData, max_members: Math.min(SIZE_MAX, formData.max_members + 1) });
+                                  setFormData({ ...formData, max_members: Math.max(SIZE_MIN, formData.max_members + 1) });
                                 }}
-                                disabled={sizePicked && formData.max_members >= SIZE_MAX}
                                 className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
                                 aria-label="More people"
                               >
@@ -1054,7 +1055,7 @@ export const GroupsPage = () => {
                           {showErrors && !sizeOk ? (
                             <FieldError>Choose how many people can join.</FieldError>
                           ) : (
-                            sizePicked && (
+                            sizeOk && (
                               <p className="field-hint mt-2.5">
                                 {formData.max_members - 1} {formData.max_members - 1 === 1 ? 'seat' : 'seats'} open for others
                               </p>

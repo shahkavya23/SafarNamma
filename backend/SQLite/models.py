@@ -1,6 +1,6 @@
 import re
 from typing import Required
-from sqlalchemy import Column , Integer , String , Float , Boolean , Text , DateTime , ForeignKey
+from sqlalchemy import Column , Integer , String , Float , Boolean , Text , DateTime , ForeignKey , UniqueConstraint
 from sqlalchemy.orm import relationship, foreign, remote
 from datetime import datetime 
 from server.database import Base 
@@ -150,6 +150,19 @@ class GroupRequest(Base):
     user_name = Column(String, nullable=False)
     status = Column(String, default="pending")  # 'pending', 'approved', 'rejected'
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class GroupMember(Base):
+
+    # The roster: one row per person the host approved (the host is not listed)
+    __tablename__ = "group_members"
+    __table_args__ = (UniqueConstraint("group_id", "user_email", name="uq_group_member"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("travel_groups.id"), nullable=False, index=True)
+    user_email = Column(String, nullable=False)
+    user_name = Column(String, nullable=False)
+    joined_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Notification(Base):

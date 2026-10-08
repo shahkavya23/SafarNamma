@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { X, MapPin, MessageCircle, ShieldAlert, Lock, Plus, Trash2, AlertCircle, Check, Clock, Loader2 } from 'lucide-react';
+import { X, MapPin, MessageCircle, ShieldAlert, Lock, Plus, Minus, Trash2, AlertCircle, Check, Clock, Loader2 } from 'lucide-react';
 import type { Group } from '../../types';
 import { groupsApi } from '../../api/client';
 import { isTripEditable, editWindowLabel, routeStops, isMultiRoute } from '../../utils/groups';
@@ -19,9 +19,8 @@ interface EditGroupModalProps {
 
 const CHAT_LINK_REGEX = /^https?:\/\/(chat\.whatsapp\.com\/[A-Za-z0-9_-]+|wa\.me\/[0-9]+|t\.me\/[A-Za-z0-9_+-]+|telegram\.me\/[A-Za-z0-9_+-]+)/i;
 const EASE = [0.22, 1, 0.36, 1] as const;
-/** A trip is 2–8 people including the host; same limits as the backend. */
+/** A trip is 2 or more people including the host; same minimum as the backend. */
 const MIN_GROUP_SIZE = 2;
-const MAX_GROUP_SIZE = 8;
 const MAX_STOPS = 5;
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -77,10 +76,10 @@ const EditGroupSheet = ({ onClose, group, destinationName, onUpdated }: Omit<Edi
   const [saved, setSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Seats the host can still open: whatever is left under the cap once the people already in are counted
+  // Fewest seats the host can leave open: enough to keep the group at the minimum size
   const minOpen = Math.max(0, MIN_GROUP_SIZE - group.current_members);
-  const maxOpen = Math.max(minOpen, MAX_GROUP_SIZE - group.current_members);
-  const openSeatOptions = Array.from({ length: maxOpen - minOpen + 1 }, (_, i) => minOpen + i);
+  const openSeats = Math.max(0, maxMembers - group.current_members);
+  const setOpenSeats = (open: number) => setMaxMembers(group.current_members + open);
 
   const busy = isSaving || saved;
   const isDirty =
@@ -119,6 +118,10 @@ const EditGroupSheet = ({ onClose, group, destinationName, onUpdated }: Omit<Edi
     }
     if (!chatLink.trim() || !CHAT_LINK_REGEX.test(chatLink.trim())) {
       setErrorMessage('Add a valid WhatsApp (chat.whatsapp.com) or Telegram (t.me) invite link.');
+      return;
+    }
+    if (maxMembers < MIN_GROUP_SIZE) {
+      setErrorMessage(`A trip needs at least ${MIN_GROUP_SIZE} people, including you.`);
       return;
     }
     if (maxMembers < group.current_members) {
@@ -350,29 +353,40 @@ const EditGroupSheet = ({ onClose, group, destinationName, onUpdated }: Omit<Edi
                   <div className="flex items-baseline justify-between gap-3 mb-2">
                     <p className="field-label !mb-0">Open seats</p>
                     <p className="field-hint">
-                      {group.current_members} joined · {maxMembers} of {MAX_GROUP_SIZE} max
+                      {group.current_members} joined · group of {maxMembers}
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Open seats">
-                    {openSeatOptions.map((open) => {
-                      const active = group.current_members + open === maxMembers;
-                      return (
-                        <button
-                          key={open}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          aria-label={`${open} open ${open === 1 ? 'seat' : 'seats'}`}
-                          onClick={() => setMaxMembers(group.current_members + open)}
-                          className={cn(
-                            'w-11 h-11 rounded-xl border font-display text-lg tabular-nums transition-colors',
-                            active ? 'bg-ink text-sand border-ink' : 'bg-paper border-line-strong text-body enabled:hover:border-ink enabled:hover:text-ink',
-                          )}
-                        >
-                          {open}
-                        </button>
-                      );
-                    })}
+                  <div className="max-w-xs">
+                    <div className="field !p-1.5 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setOpenSeats(Math.max(minOpen, openSeats - 1))}
+                        disabled={openSeats <= minOpen}
+                        className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
+                        aria-label="Fewer open seats"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <input
+                        id="edit-trip-seats"
+                        type="number"
+                        inputMode="numeric"
+                        min={minOpen}
+                        aria-label="Open seats"
+                        value={openSeats}
+                        onChange={(e) => setOpenSeats(Math.max(0, Math.floor(Number(e.target.value)) || 0))}
+                        onBlur={() => openSeats < minOpen && setOpenSeats(minOpen)}
+                        className="w-20 text-center bg-transparent font-bold text-lg text-ink tabular-nums placeholder:text-muted focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setOpenSeats(Math.max(minOpen, openSeats + 1))}
+                        className="w-10 h-10 rounded-xl hover:bg-stone flex items-center justify-center text-ink transition-colors"
+                        aria-label="More open seats"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                   <p className="field-hint mt-2">
                     {maxMembers - group.current_members > 0

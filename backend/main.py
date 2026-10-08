@@ -5,8 +5,8 @@ import json
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from server.database import engine, Base, get_db
+from sqlalchemy import func, or_
+from server.database import engine, Base, get_db, SessionLocal
 from SQLite import models
 from Submissions import schemas 
 from server.cloudinary_utils import delete_destination_cloudinary_assets
@@ -45,6 +45,25 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(bind = engine)
+
+
+def _backfill_group_members() -> None:
+    """Gives people approved before group_members existed their roster row. Does nothing once they all have one."""
+    db = SessionLocal()
+    try:
+        have = {(m.group_id, m.user_email.lower()) for m in db.query(models.GroupMember).all()}
+        for req in db.query(models.GroupRequest).filter(models.GroupRequest.status == "approved").all():
+            key = (req.group_id, req.user_email.lower())
+            if key in have:
+                continue
+            have.add(key)
+            db.add(models.GroupMember(group_id=req.group_id, user_name=req.user_name, user_email=req.user_email, joined_at=req.created_at))
+        db.commit()
+    finally:
+        db.close()
+
+
+_backfill_group_members()
 
 @app.get('/')
 async def root():
@@ -113,6 +132,27 @@ def _detach_destination(db: Session, dest: models.Destination) -> None:
         group.destination_id = None
         group.custom_destination = group.custom_destination or dest.name
     db.flush()
+
+
+def _remove_member(db: Session, group: models.TravelGroup, email: str) -> None:
+    """Takes an approved person off the roster and frees their seat. The caller commits."""
+    db.query(models.GroupMember).filter(
+        models.GroupMember.group_id == group.id,
+        models.GroupMember.user_email.ilike(email)
+    ).delete(synchronize_session=False)
+    group.current_members = max(1, group.current_members - 1)
+    if group.status == "full":
+        group.status = "open"
+
+
+def _notify_removed(db: Session, group: models.TravelGroup, email: str) -> None:
+    db.add(models.Notification(
+        user_email=email,
+        type="group_removed",
+        title="Removed from trip",
+        message=f"The host removed you from '{group.title}'.",
+        link=f"/groups/{group.id}"
+    ))
 
 
 def _owns_notification(notif: models.Notification, user: CurrentUser) -> bool:
@@ -589,8 +629,9 @@ def delete_travel_group(group_id: int, db: Session = Depends(get_db), user: Curr
             detail=f"This group was created recently. Organizers can only delete a group 2 hours after creation ({remaining_minutes} minute(s) remaining)."
         )
 
-    # Clean up associated join requests first (cascade)
+    # Clean up associated join requests and the roster first (cascade)
     db.query(models.GroupRequest).filter(models.GroupRequest.group_id == group_id).delete()
+    db.query(models.GroupMember).filter(models.GroupMember.group_id == group_id).delete()
 
     db.delete(group)
     db.commit()
@@ -732,12 +773,22 @@ def update_request_status(request_id: int, new_status: str, db: Session = Depend
         if group.current_members >= group.max_members:
             group.status = "full"
 
+        db.add(models.GroupMember(group_id=group.id, user_name=req.user_name, user_email=req.user_email))
+
+    # Declining someone who was already approved takes them off the trip and frees their seat
+    was_removed = new_status == "rejected" and req.status == "approved"
+    if was_removed:
+        _remove_member(db, group, req.user_email)
+
     req.status = new_status
     db.commit()
     db.refresh(req)
 
     # Notify applicant of approval or rejection
-    if new_status == "approved":
+    if was_removed:
+        _notify_removed(db, group, req.user_email)
+        db.commit()
+    elif new_status == "approved":
         notif = models.Notification(
             user_email=req.user_email,
             type="group_approved",
@@ -759,6 +810,57 @@ def update_request_status(request_id: int, new_status: str, db: Session = Depend
         db.commit()
 
     return req
+
+
+@app.get("/api/groups/{group_id}/members", response_model=List[schemas.GroupMemberResponse])
+def get_group_members(group_id: int, search: Optional[str] = None, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """The host's roster of approved people, optionally filtered by name or email."""
+    group = db.query(models.TravelGroup).filter(models.TravelGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    if group.organizer_email.lower() != user.email.lower():
+        raise HTTPException(status_code=403, detail="Only the organizer can view the people on this trip.")
+
+    query = db.query(models.GroupMember).filter(models.GroupMember.group_id == group_id)
+    term = (search or "").strip()
+    if term:
+        # autoescape so a typed % or _ is matched literally
+        query = query.filter(or_(
+            models.GroupMember.user_name.icontains(term, autoescape=True),
+            models.GroupMember.user_email.icontains(term, autoescape=True),
+        ))
+    return query.order_by(models.GroupMember.joined_at, models.GroupMember.id).all()
+
+
+@app.delete("/api/groups/{group_id}/members/{member_id}", response_model=schemas.TravelGroupResponse)
+def remove_group_member(group_id: int, member_id: int, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """The host removes someone they had approved: their seat reopens and they lose the chat link."""
+    group = db.query(models.TravelGroup).filter(models.TravelGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    if group.organizer_email.lower() != user.email.lower():
+        raise HTTPException(status_code=403, detail="Only the organizer can remove people from this trip.")
+
+    member = db.query(models.GroupMember).filter(
+        models.GroupMember.id == member_id,
+        models.GroupMember.group_id == group_id
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="This person is no longer on the trip.")
+
+    email = member.user_email
+    # Their request flips to rejected, which is what hides the chat link from them
+    db.query(models.GroupRequest).filter(
+        models.GroupRequest.group_id == group_id,
+        models.GroupRequest.user_email.ilike(email)
+    ).update({"status": "rejected"}, synchronize_session=False)
+    _remove_member(db, group, email)
+    _notify_removed(db, group, email)
+    db.commit()
+    db.refresh(group)
+    return group
 
 @app.get("/api/users/profile", response_model=schemas.UserResponse)
 def get_user_profile(db: Session = Depends(get_db), current: CurrentUser = Depends(get_current_user)):

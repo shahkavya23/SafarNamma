@@ -136,8 +136,8 @@ class TravelGroupCreate(BaseModel):
     description : str 
     trip_date : NaiveUtcDatetime 
     meeting_area : str 
-    # 2–8 people including the host; same limits as the start-a-trip form
-    max_members : Annotated[int, Field(ge=2, le=8)] = 6
+    # 2 or more people including the host; same minimum as the start-a-trip form
+    max_members : Annotated[int, Field(ge=2)] = 6
     chat_link : Optional[str] = None
     safety_notes : Optional[str] = None 
 
@@ -146,7 +146,7 @@ class TravelGroupUpdate(BaseModel):
     description : Optional[str] = None 
     trip_date : Optional[NaiveUtcDatetime] = None 
     meeting_area : Optional[str] = None 
-    max_members : Annotated[int | None , Field(ge = 2 , le = 8)] = None 
+    max_members : Annotated[int | None , Field(ge = 2)] = None
     chat_link : Optional[str] = None 
     safety_notes : Optional[str] = None 
     custom_destination : Optional[str] = None 
@@ -189,6 +189,15 @@ class GroupRequestResponse(BaseModel):
     user_email: str
     status: str
     created_at: UtcDatetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GroupMemberResponse(BaseModel):
+    id: int
+    group_id: int
+    user_name: str
+    user_email: str
+    joined_at: UtcDatetime
     model_config = ConfigDict(from_attributes=True)
 
 

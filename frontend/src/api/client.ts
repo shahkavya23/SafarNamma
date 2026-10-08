@@ -1,6 +1,6 @@
 import { MOCK_PLACES } from '../mock/data';
 import { MOCK_GROUPS } from '../mock/groups';
-import type { Place, Group, GroupRequest, Submission, Review, AppNotification } from '../types';
+import type { Place, Group, GroupRequest, GroupMember, Submission, Review, AppNotification } from '../types';
 import { PLACE_CATEGORIES } from '../types';
 export { PLACE_CATEGORIES };
 
@@ -292,6 +292,27 @@ export const groupsApi = {
       console.error("Failed to update group", error);
       throw error;
     }
+  },
+
+  // 9. Organizer lists the approved people on the trip; the search runs in the database
+  getMembers: async (groupId: number | string, search = ''): Promise<GroupMember[]> => {
+    const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+    const response = await apiFetch(`${BASE_URL}api/groups/${groupId}/members${query}`);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(err.detail, 'Failed to load the crew'));
+    }
+    return await response.json();
+  },
+
+  // 10. Organizer removes an approved person; returns the trip with its seat freed
+  removeMember: async (groupId: number | string, memberId: number): Promise<Group> => {
+    const response = await apiFetch(`${BASE_URL}api/groups/${groupId}/members/${memberId}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(err.detail, 'Failed to remove this person'));
+    }
+    return await response.json();
   }
 };
 

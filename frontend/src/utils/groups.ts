@@ -85,6 +85,17 @@ export const editWindowLabel = (group: Group): string => {
   return h >= 1 ? `Edit window closes in ${h}h ${m}m` : `Edit window closes in ${m}m`;
 };
 
+/** How long until the trip starts: "4d 6h", "3h 20m", "25m". Null once it has left. */
+export const timeToDeparture = (group: Group): string | null => {
+  const ms = start(group) - Date.now();
+  if (ms <= 0) return null;
+  const totalMin = Math.max(1, Math.floor(ms / 60_000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
+  return h >= 1 ? `${h}h ${m}m` : `${m}m`;
+};
+
 /** Check if trip is a multi-stop itinerary */
 export const isMultiRoute = (group: Group): boolean => {
   return routeStops(group.custom_destination).length > 1;

@@ -75,6 +75,15 @@ export interface GroupRequest {
   created_at: string;
 }
 
+/** One approved person on a trip's roster (the host is not listed). */
+export interface GroupMember {
+  id: number;
+  group_id: number;
+  user_name: string;
+  user_email: string;
+  joined_at: string;
+}
+
 export interface User {
   id: string;
   name: string;
