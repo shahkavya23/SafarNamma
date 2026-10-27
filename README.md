@@ -20,6 +20,7 @@
 ![Last commit](https://img.shields.io/github/last-commit/shahkavya23/roamlocal-?style=flat-square&color=1E4D4A)
 ![Repo size](https://img.shields.io/github/repo-size/shahkavya23/roamlocal-?style=flat-square&color=1E4D4A)
 
+**[Demo video](#-see-it-in-action)** ·
 **[Quick start](#-quick-start)** ·
 **[How it works](#-how-it-fits-together)** ·
 **[Contribute](#-contributing-in-5-steps)** ·
@@ -30,6 +31,20 @@
 <br/>
 
 <img src="frontend/public/images/nandi-hills-hero-1600.webp" width="100%" alt="Hairpin road up Nandi Hills at sunrise" />
+
+<br/>
+
+## 🎬 See it in action
+
+<div align="center">
+
+<a href="https://drive.google.com/file/d/1qQYdZ8a6z0Ap7N-9wQWy8M7kG18sklE1/view?usp=sharing">
+  <img src="https://img.shields.io/badge/▶_Watch_the_demo-Google_Drive-E8622C?style=for-the-badge&logo=googledrive&logoColor=white" alt="Watch the SafarNamma demo video" />
+</a>
+
+A quick walkthrough of SafarNamma: finding places, joining a crew and hosting a trip.
+
+</div>
 
 <br/>
 
