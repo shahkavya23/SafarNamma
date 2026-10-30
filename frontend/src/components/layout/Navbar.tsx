@@ -61,10 +61,23 @@ export const Navbar = () => {
 
   // Scroll listener: the pill turns to sandstone glass once the page moves
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 60);
+    // Read the position once per frame and only touch state when it crosses the line
+    let frame = 0;
+    let last: boolean | null = null;
+    const update = () => {
+      frame = 0;
+      const next = window.scrollY > 60;
+      if (next !== last) setIsScrolled((last = next));
+    };
+    const handleScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
     window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
+    update();
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      cancelAnimationFrame(frame);
+    };
   }, [location.pathname]);
 
   // Close menus on navigation
@@ -85,6 +98,7 @@ export const Navbar = () => {
 
   const navLinks = [
     { name: 'Explore', path: '/explore' },
+    ...(isAdmin ? [{ name: 'Itineraries', path: '/itineraries' }] : []),
     { name: 'Groups', path: '/groups' },
     { name: 'Submit a place', path: '/submit' },
   ];

@@ -1,5 +1,5 @@
-from typing import Optional , List , Annotated
-from pydantic import BaseModel , Field , ConfigDict , field_validator , AfterValidator
+from typing import Optional , List , Annotated , Literal
+from pydantic import BaseModel , Field , ConfigDict , field_validator , model_validator , AfterValidator
 from datetime import datetime , timezone
 from SQLite.models import VALID_CATEGORIES
 
@@ -61,9 +61,29 @@ class AdminApprovalPayload(BaseModel):
     image_url : Optional[str] = None
     gallery_images : Optional[List[str]] = None
     menu_images : Optional[List[str]] = None
+    map_link : Optional[str] = None
+
+def _check_coordinates(lat : Optional[float] , lng : Optional[float]) -> None:
+    if (lat is None) != (lng is None):
+        raise ValueError("Provide both latitude and longitude, or neither")
+    if lat is not None and (abs(lat) > 90 or abs(lng) > 180 or (lat == 0 and lng == 0)):
+        raise ValueError("Latitude must be within 90 and longitude within 180 degrees")
 
 class DestinationCreate(DestinationBase):
-    pass 
+    @model_validator(mode='after')
+    def check_coordinates(self):
+        _check_coordinates(self.latitude, self.longitude)
+        return self
+
+class DestinationLocationUpdate(BaseModel):
+    map_link : Optional[str] = None
+    latitude : Optional[float] = None
+    longitude : Optional[float] = None
+
+    @model_validator(mode='after')
+    def check_coordinates(self):
+        _check_coordinates(self.latitude, self.longitude)
+        return self
 
 class DestinationResponse(DestinationBase):
 
@@ -129,6 +149,7 @@ class TravelGroupCreate(BaseModel):
 
     destination_id : Optional[int] = None
     custom_destination : Optional[str] = None
+    itinerary_id : Optional[int] = None
     # Filled in server-side from the signed-in user
     organizer_name : Optional[str] = None
     organizer_email : Optional[str] = None
@@ -149,7 +170,8 @@ class TravelGroupUpdate(BaseModel):
     max_members : Annotated[int | None , Field(ge = 2)] = None
     chat_link : Optional[str] = None 
     safety_notes : Optional[str] = None 
-    custom_destination : Optional[str] = None 
+    custom_destination : Optional[str] = None
+    itinerary_id : Optional[int] = None 
     destination_id :  Optional[int] = None 
 
 
@@ -159,6 +181,7 @@ class TravelGroupResponse(BaseModel):
     id : int 
     destination_id : Optional[int] = None
     custom_destination : Optional[str] = None
+    itinerary_id : Optional[int] = None
     organizer_name : str 
     organizer_email : str 
     title : str 
@@ -216,5 +239,92 @@ class NotificationResponse(BaseModel):
 class NotificationListResponse(BaseModel):
     unread_count: int
     notifications: List[NotificationResponse]
+
+
+# --- Itinerary Stop Schemas ---
+class ItineraryStopCreate(BaseModel):
+    destination_id: int
+    order_index: int = 1
+    transport_mode: Optional[str] = None  # e.g., "Walking", "Cab / Auto", "Drive"
+    note: Optional[str] = None           # e.g., "Have dinner here"
+    # How to resolve a clash when order_index is already taken:
+    # "shift" pushes that stop and later ones down, "replace" swaps it out.
+    conflict_mode: Optional[Literal["shift", "replace"]] = None
+
+class ItineraryStopUpdate(BaseModel):
+    destination_id: Optional[int] = None
+    order_index: Optional[int] = None
+    transport_mode: Optional[str] = None
+    note: Optional[str] = None
+
+class DestinationSummary(BaseModel):
+    id: int
+    name: str
+    category: str
+    description: Optional[str] = ""
+    image_url: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    map_link: Optional[str] = None
+    duration: Optional[str] = None
+    transport_options: Optional[str] = None
+    opening_hours: Optional[str] = None
+    closing_hours: Optional[str] = None
+    best_season: Optional[str] = None
+    budget_tier: Optional[str] = None
+    nearby_facilities: Optional[str] = None
+    rating: Optional[float] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class ItineraryStopResponse(BaseModel):
+    id: int
+    itinerary_id: int
+    destination_id: int
+    order_index: int
+    transport_mode: Optional[str] = None
+    note: Optional[str] = None
+    destination: Optional[DestinationSummary] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Itinerary Schemas ---
+class ItineraryCreate(BaseModel):
+    title: Annotated[str, Field(..., min_length=3, max_length=150)]
+    description: Annotated[str, Field(..., min_length=10)]
+    image_url: Optional[str] = None
+    estimated_duration: Optional[str] = None
+    estimated_budget: Optional[float] = None
+    stops: List[ItineraryStopCreate] = []
+
+    @field_validator("estimated_duration")
+    @classmethod
+    def validate_duration(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            clean = v.strip()
+            if not clean:
+                return None
+            if clean.startswith("-") or (clean.replace(".", "", 1).isdigit() and float(clean) <= 0):
+                raise ValueError("Estimated duration cannot be negative or zero.")
+            return clean
+        return None
+
+class ItineraryUpdate(BaseModel):
+    title: Optional[Annotated[str, Field(min_length=3, max_length=150)]] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    estimated_duration: Optional[str] = None
+    estimated_budget: Optional[float] = None
+
+class ItineraryResponse(BaseModel):
+    id: int
+    title: str
+    description: str
+    image_url: Optional[str] = None
+    estimated_duration: Optional[str] = None
+    estimated_budget: Optional[float] = None
+    created_by_email: str
+    created_at: UtcDatetime
+    stops: List[ItineraryStopResponse] = []
+    model_config = ConfigDict(from_attributes=True)
 
 

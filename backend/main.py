@@ -10,6 +10,7 @@ from server.database import engine, Base, get_db, SessionLocal
 from SQLite import models
 from Submissions import schemas 
 from server.cloudinary_utils import delete_destination_cloudinary_assets
+from server.geo import coords_from_map_link
 from server.auth import (
     CurrentUser,
     create_session_token,
@@ -230,6 +231,13 @@ def create_destination(destination : schemas.DestinationCreate , db : Session = 
             detail=f"Duplicate limit reached: There are already {existing_count} submissions for '{clean_name}'. To prevent spam and duplicates, a maximum of 2 submissions are permitted for the same place name."
         )
 
+    lat = destination.latitude
+    lng = destination.longitude
+    if (lat is None or lng is None) and destination.map_link:
+        coords = coords_from_map_link(destination.map_link)
+        if coords:
+            lat, lng = coords
+
     new_dest = models.Destination(
         name = clean_name , 
         category = destination.category,
@@ -240,8 +248,8 @@ def create_destination(destination : schemas.DestinationCreate , db : Session = 
         map_link = destination.map_link,
         best_season = destination.best_season,
         is_hidden_gem = destination.is_hidden_gem or False,
-        latitude = destination.latitude,
-        longitude = destination.longitude,
+        latitude = lat,
+        longitude = lng,
         duration = destination.duration,
         opening_hours = destination.opening_hours,
         closing_hours = destination.closing_hours,
@@ -366,12 +374,20 @@ def edit_destination(destination_id : int , destination_update: schemas.Destinat
         dest.best_season = destination_update.best_season
     if destination_update.is_hidden_gem is not None:
         dest.is_hidden_gem = destination_update.is_hidden_gem
-    if destination_update.latitude is not None:
+    if destination_update.map_link is not None:
+        dest.map_link = destination_update.map_link
+    if destination_update.latitude is not None and destination_update.longitude is not None:
+        # Coordinates typed in by hand beat whatever the link says
         dest.latitude = destination_update.latitude
-    if destination_update.longitude is not None:
         dest.longitude = destination_update.longitude
-    if destination_update.map_link is not None :
-        dest.map_link = destination_update.map_link 
+    else:
+        coords = coords_from_map_link(destination_update.map_link)
+        if coords:
+            dest.latitude, dest.longitude = coords
+        elif {"latitude", "longitude"} <= destination_update.model_fields_set:
+            # Both sent empty: the admin cleared the location
+            dest.latitude = None
+            dest.longitude = None
     if destination_update.duration is not None:
         dest.duration = destination_update.duration
     if destination_update.opening_hours is not None:
@@ -386,6 +402,31 @@ def edit_destination(destination_id : int , destination_update: schemas.Destinat
         dest.gallery_images = json.dumps(destination_update.gallery_images) if destination_update.gallery_images else None
     if destination_update.menu_images is not None:
         dest.menu_images = json.dumps(destination_update.menu_images) if destination_update.menu_images else None
+
+    db.commit()
+    db.refresh(dest)
+
+    return dest
+
+
+@app.patch("/api/destinations/{destination_id}/location", response_model = schemas.DestinationResponse)
+def update_destination_location(destination_id : int , payload : schemas.DestinationLocationUpdate , db : Session = Depends(get_db) , _admin : CurrentUser = Depends(require_admin)):
+    dest = db.query(models.Destination).filter(models.Destination.id == destination_id).first()
+    if not dest:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Destination not found")
+
+    link = payload.map_link.strip() if payload.map_link else None
+    if link:
+        dest.map_link = link
+
+    if payload.latitude is not None and payload.longitude is not None:
+        # Coordinates typed in by hand beat whatever the link says
+        dest.latitude = payload.latitude
+        dest.longitude = payload.longitude
+    else:
+        coords = coords_from_map_link(link)
+        if coords:
+            dest.latitude, dest.longitude = coords
 
     db.commit()
     db.refresh(dest)
@@ -443,6 +484,7 @@ def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(
     new_group = models.TravelGroup(
         destination_id=group.destination_id,
         custom_destination=group.custom_destination,
+        itinerary_id=group.itinerary_id,
         organizer_name=group.organizer_name,
         organizer_email=group.organizer_email,
         title=group.title,
@@ -1053,6 +1095,11 @@ def approve_submission(destination_id: int, payload: schemas.AdminApprovalPayloa
     dest.closing_hours = payload.closing_hours
     dest.transport_options = payload.transport_options
     dest.nearby_facilities = payload.nearby_facilities
+    if payload.map_link is not None:
+        dest.map_link = payload.map_link.strip() if payload.map_link else None
+        coords = coords_from_map_link(dest.map_link)
+        if coords:
+            dest.latitude, dest.longitude = coords
     dest.is_approved = True
     dest.submission_status = "approved"
 
@@ -1211,3 +1258,235 @@ def delete_notification(notification_id: int, db: Session = Depends(get_db), use
         db.commit()
     return {"status": "success"}
 
+
+
+# ==========================================
+# ITINERARIES ENDPOINTS
+# ==========================================
+
+@app.get("/api/itineraries", response_model=List[schemas.ItineraryResponse])
+def get_all_itineraries(db: Session = Depends(get_db)):
+    """Fetch all curated itineraries with their stops and destinations."""
+    return db.query(models.Itinerary).order_by(models.Itinerary.created_at.desc()).all()
+
+
+@app.get("/api/itineraries/{itinerary_id}", response_model=schemas.ItineraryResponse)
+def get_itinerary_by_id(itinerary_id: int, db: Session = Depends(get_db)):
+    """Fetch a single itinerary with all ordered stops."""
+    itinerary = db.query(models.Itinerary).filter(models.Itinerary.id == itinerary_id).first()
+    if not itinerary:
+        raise HTTPException(status_code=404, detail="Itinerary not found")
+
+    # Auto-repair / re-sequence stops if there are gaps (e.g. from previously deleted stops)
+    if itinerary.stops:
+        sorted_stops = sorted(itinerary.stops, key=lambda s: (s.order_index or 0, s.id or 0))
+        needs_commit = False
+        for new_idx, s in enumerate(sorted_stops, start=1):
+            if s.order_index != new_idx:
+                s.order_index = new_idx
+                needs_commit = True
+        if needs_commit:
+            db.commit()
+            db.refresh(itinerary)
+
+    return itinerary
+
+
+@app.post("/api/itineraries", response_model=schemas.ItineraryResponse, status_code=status.HTTP_201_CREATED)
+def create_itinerary(
+    payload: schemas.ItineraryCreate,
+    db: Session = Depends(get_db),
+    admin: CurrentUser = Depends(require_admin)
+):
+    """Admin creates a new curated itinerary with initial stops."""
+    new_itinerary = models.Itinerary(
+        title=payload.title.strip(),
+        description=payload.description.strip(),
+        image_url=payload.image_url.strip() if payload.image_url else None,
+        estimated_duration=payload.estimated_duration.strip() if payload.estimated_duration else None,
+        estimated_budget=payload.estimated_budget,
+        created_by_email=admin.email,
+    )
+    db.add(new_itinerary)
+    db.flush()
+
+    for idx, stop_data in enumerate(payload.stops):
+        dest = db.query(models.Destination).filter(models.Destination.id == stop_data.destination_id).first()
+        if not dest:
+            continue
+        stop = models.ItineraryStop(
+            itinerary_id=new_itinerary.id,
+            destination_id=stop_data.destination_id,
+            order_index=stop_data.order_index or (idx + 1),
+            transport_mode=stop_data.transport_mode,
+            note=stop_data.note,
+        )
+        db.add(stop)
+
+    db.commit()
+    db.refresh(new_itinerary)
+    return new_itinerary
+
+
+@app.put("/api/itineraries/{itinerary_id}", response_model=schemas.ItineraryResponse)
+def update_itinerary(
+    itinerary_id: int,
+    payload: schemas.ItineraryUpdate,
+    db: Session = Depends(get_db),
+    admin: CurrentUser = Depends(require_admin)
+):
+    """Admin updates itinerary metadata."""
+    itinerary = db.query(models.Itinerary).filter(models.Itinerary.id == itinerary_id).first()
+    if not itinerary:
+        raise HTTPException(status_code=404, detail="Itinerary not found")
+
+    if payload.title is not None:
+        itinerary.title = payload.title.strip()
+    if payload.description is not None:
+        itinerary.description = payload.description.strip()
+    if payload.image_url is not None:
+        itinerary.image_url = payload.image_url.strip() if payload.image_url else None
+    if payload.estimated_duration is not None:
+        itinerary.estimated_duration = payload.estimated_duration.strip() if payload.estimated_duration else None
+    if payload.estimated_budget is not None:
+        itinerary.estimated_budget = payload.estimated_budget
+
+    db.commit()
+    db.refresh(itinerary)
+    return itinerary
+
+
+@app.delete("/api/itineraries/{itinerary_id}", status_code=status.HTTP_200_OK)
+def delete_itinerary(
+    itinerary_id: int,
+    db: Session = Depends(get_db),
+    admin: CurrentUser = Depends(require_admin)
+):
+    """Admin deletes an itinerary (stops cascade deleted)."""
+    itinerary = db.query(models.Itinerary).filter(models.Itinerary.id == itinerary_id).first()
+    if not itinerary:
+        raise HTTPException(status_code=404, detail="Itinerary not found")
+
+    db.delete(itinerary)
+    db.commit()
+    return {"message": "Itinerary deleted successfully"}
+
+
+@app.post("/api/itineraries/{itinerary_id}/stops", response_model=schemas.ItineraryStopResponse, status_code=status.HTTP_201_CREATED)
+def add_itinerary_stop(
+    itinerary_id: int,
+    payload: schemas.ItineraryStopCreate,
+    db: Session = Depends(get_db),
+    admin: CurrentUser = Depends(require_admin)
+):
+    """Admin adds a single stop to an existing itinerary."""
+    itinerary = db.query(models.Itinerary).filter(models.Itinerary.id == itinerary_id).first()
+    if not itinerary:
+        raise HTTPException(status_code=404, detail="Itinerary not found")
+
+    dest = db.query(models.Destination).filter(models.Destination.id == payload.destination_id).first()
+    if not dest:
+        raise HTTPException(status_code=404, detail="Destination not found")
+
+    existing_stops = (
+        db.query(models.ItineraryStop)
+        .filter(models.ItineraryStop.itinerary_id == itinerary_id)
+        .all()
+    )
+    taken = next((s for s in existing_stops if s.order_index == payload.order_index), None)
+
+    if taken and payload.conflict_mode is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Stop #{payload.order_index} is already taken. Choose to shift or replace it.",
+        )
+
+    if taken and payload.conflict_mode == "replace":
+        taken.destination_id = payload.destination_id
+        taken.transport_mode = payload.transport_mode
+        taken.note = payload.note
+        db.commit()
+        db.refresh(taken)
+        taken.destination = dest
+        return taken
+
+    if taken and payload.conflict_mode == "shift":
+        for s in existing_stops:
+            if s.order_index >= payload.order_index:
+                s.order_index += 1
+
+    new_stop = models.ItineraryStop(
+        itinerary_id=itinerary_id,
+        destination_id=payload.destination_id,
+        order_index=payload.order_index,
+        transport_mode=payload.transport_mode,
+        note=payload.note,
+    )
+    db.add(new_stop)
+    db.flush()
+
+    # Re-sequence all stops to ensure strictly contiguous order (1, 2, 3...)
+    all_stops = (
+        db.query(models.ItineraryStop)
+        .filter(models.ItineraryStop.itinerary_id == itinerary_id)
+        .order_by(models.ItineraryStop.order_index.asc(), models.ItineraryStop.id.asc())
+        .all()
+    )
+    for new_idx, s in enumerate(all_stops, start=1):
+        s.order_index = new_idx
+
+    db.commit()
+    db.refresh(new_stop)
+    new_stop.destination = dest
+    return new_stop
+
+
+@app.patch("/api/itineraries/stops/{stop_id}", response_model=schemas.ItineraryStopResponse)
+def update_itinerary_stop(
+    stop_id: int,
+    payload: schemas.ItineraryStopUpdate,
+    db: Session = Depends(get_db),
+    admin: CurrentUser = Depends(require_admin)
+):
+    """Admin edits a stop's transit to the next leg or its note."""
+    stop = db.query(models.ItineraryStop).filter(models.ItineraryStop.id == stop_id).first()
+    if not stop:
+        raise HTTPException(status_code=404, detail="Stop not found")
+
+    if payload.transport_mode is not None:
+        stop.transport_mode = payload.transport_mode.strip() or None
+    if payload.note is not None:
+        stop.note = payload.note.strip() or None
+
+    db.commit()
+    db.refresh(stop)
+    return stop
+
+
+@app.delete("/api/itineraries/stops/{stop_id}", status_code=status.HTTP_200_OK)
+def delete_itinerary_stop(
+    stop_id: int,
+    db: Session = Depends(get_db),
+    admin: CurrentUser = Depends(require_admin)
+):
+    """Admin removes a stop from an itinerary."""
+    stop = db.query(models.ItineraryStop).filter(models.ItineraryStop.id == stop_id).first()
+    if not stop:
+        raise HTTPException(status_code=404, detail="Stop not found")
+
+    itinerary_id = stop.itinerary_id
+    db.delete(stop)
+    db.flush()
+
+    # Re-sequence remaining stops for this itinerary
+    remaining_stops = (
+        db.query(models.ItineraryStop)
+        .filter(models.ItineraryStop.itinerary_id == itinerary_id)
+        .order_by(models.ItineraryStop.order_index.asc(), models.ItineraryStop.id.asc())
+        .all()
+    )
+    for new_idx, s in enumerate(remaining_stops, start=1):
+        s.order_index = new_idx
+
+    db.commit()
+    return {"message": "Stop removed successfully"}

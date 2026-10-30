@@ -138,6 +138,9 @@ class TravelGroup(Base):
     safety_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    itinerary_id = Column(Integer, ForeignKey("itineraries.id"), nullable=True)
+    itinerary = relationship("Itinerary")
+
 
 class GroupRequest(Base):
 
@@ -177,3 +180,42 @@ class Notification(Base):
     link = Column(String, nullable=True)
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+
+
+
+class Itinerary(Base):
+    __tablename__ = "itineraries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)               # e.g., "Mangalore Weekend Food Crawl"
+    description = Column(Text, nullable=False)          # What this trip is about
+    image_url = Column(String, nullable=True)           # The single cover banner for this trip
+    estimated_duration = Column(String, nullable=True)  # e.g., "4-5 Hours" or "1 Day"
+    estimated_budget = Column(Float, nullable=True)     # Optional budget per person
+    created_by_email = Column(String, nullable=False)   # Admin who created it
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationship to get all stops in proper order automatically!
+    stops = relationship(
+        "ItineraryStop",
+        back_populates="itinerary",
+        cascade="all, delete-orphan",
+        order_by="ItineraryStop.order_index",
+    )
+
+
+class ItineraryStop(Base):
+    __tablename__ = "itinerary_stops"
+
+    id = Column(Integer, primary_key=True, index=True)
+    itinerary_id = Column(Integer, ForeignKey("itineraries.id", ondelete="CASCADE"), nullable=False)
+    destination_id = Column(Integer, ForeignKey("destinations.id"), nullable=False)
+    order_index = Column(Integer, nullable=False, default=1)  # 1 for Stop A, 2 for Stop B, etc.
+    transport_mode = Column(String, nullable=True)             # e.g., "Walking", "Cab / Auto", "Bus"
+    note = Column(String, nullable=True)                      # e.g. "Dinner here", "Scenic viewpoint"
+
+    # Relationships so SQLAlchemy automatically joins the data:
+    itinerary = relationship("Itinerary", back_populates="stops")
+    destination = relationship("Destination", lazy="joined")

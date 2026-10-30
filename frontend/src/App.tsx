@@ -5,17 +5,23 @@ import { PresenceProvider } from './context/PresenceContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { Layout } from './components/layout/Layout';
 import { HomePage } from './pages/HomePage';
-import { ExplorePage } from './pages/ExplorePage';
-import { PlaceDetailsPage } from './pages/PlaceDetailsPage';
-import { GroupsPage } from './pages/GroupsPage';
-import { GroupDetailsPage } from './pages/GroupDetailsPage';
-import { TripStoryPage } from './pages/TripStoryPage';
-import { SubmitPlacePage } from './pages/SubmitPlacePage';
-import { EditPlacePage } from './pages/EditPlacePage';
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
-import { UserProfilePage } from './pages/UserProfilePage';
-import {AdminDashboard} from './pages/AdminDashboard'
+import { SampleTripSheet } from './components/groups/SampleTripSheet';
+import { lazyPage } from './utils/lazyPage';
+
+// Every page but the landing one loads on first visit, so the home page doesn't wait on the whole app
+const ExplorePage = lazyPage(() => import('./pages/ExplorePage'), 'ExplorePage');
+const ItinerariesPage = lazyPage(() => import('./pages/ItinerariesPage'), 'ItinerariesPage');
+const ItineraryDetailsPage = lazyPage(() => import('./pages/ItineraryDetailsPage'), 'ItineraryDetailsPage');
+const PlaceDetailsPage = lazyPage(() => import('./pages/PlaceDetailsPage'), 'PlaceDetailsPage');
+const GroupsPage = lazyPage(() => import('./pages/GroupsPage'), 'GroupsPage');
+const GroupDetailsPage = lazyPage(() => import('./pages/GroupDetailsPage'), 'GroupDetailsPage');
+const TripStoryPage = lazyPage(() => import('./pages/TripStoryPage'), 'TripStoryPage');
+const SubmitPlacePage = lazyPage(() => import('./pages/SubmitPlacePage'), 'SubmitPlacePage');
+const EditPlacePage = lazyPage(() => import('./pages/EditPlacePage'), 'EditPlacePage');
+const LoginPage = lazyPage(() => import('./pages/LoginPage'), 'LoginPage');
+const RegisterPage = lazyPage(() => import('./pages/RegisterPage'), 'RegisterPage');
+const UserProfilePage = lazyPage(() => import('./pages/UserProfilePage'), 'UserProfilePage');
+const AdminDashboard = lazyPage(() => import('./pages/AdminDashboard'), 'AdminDashboard');
 
 function App() {
   return (
@@ -23,10 +29,22 @@ function App() {
       <FavoritesProvider>
         <PresenceProvider>
         <BrowserRouter>
+          {/* Opens from any sample trip card on the home board or Groups page */}
+          <SampleTripSheet />
           <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="explore" element={<ExplorePage />} />
+            <Route path="itineraries" element={
+              <ProtectedRoute requireAdmin={true}>
+                <ItinerariesPage />
+              </ProtectedRoute>
+            } />
+            <Route path="itineraries/:id" element={
+              <ProtectedRoute requireAdmin={true}>
+                <ItineraryDetailsPage />
+              </ProtectedRoute>
+            } />
             
             <Route path="places/:slug" element={
               <ProtectedRoute>

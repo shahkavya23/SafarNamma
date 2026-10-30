@@ -1,6 +1,6 @@
 import { MOCK_PLACES } from '../mock/data';
 import { MOCK_GROUPS } from '../mock/groups';
-import type { Place, Group, GroupRequest, GroupMember, Submission, Review, AppNotification } from '../types';
+import type { Place, Group, GroupRequest, GroupMember, Submission, Review, AppNotification, Itinerary, ItineraryStop, CreateItineraryData } from '../types';
 import { PLACE_CATEGORIES } from '../types';
 export { PLACE_CATEGORIES };
 
@@ -83,6 +83,10 @@ export const placesApi = {
     return result;
   },
 
+  getAllPlaces: async (): Promise<Place[]> => {
+    return placesApi.getPlaces();
+  },
+
   getPopularWeekend: async (): Promise<Place[]> => {
     try {
       const response = await apiFetch(`${BASE_URL}api/destinations/popular-weekend`);
@@ -130,6 +134,25 @@ export const placesApi = {
       console.error("Failed to edit place", error);
       return false;
     }
+  },
+
+  // Changes only where a place is. Throws on failure, so callers can't mistake it for saved.
+  updatePlaceLocation: async (
+    id: number,
+    data: { map_link: string | null; latitude: number | null; longitude: number | null },
+  ): Promise<Place> => {
+    const response = await apiFetch(`${BASE_URL}api/destinations/${id}/location`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(`Couldn't save the location, so the stop wasn't added. ${errorMessage(err.detail, 'Please try again.')}`);
+    }
+    return response.json();
   },
 
   createPlace: async (data: any): Promise<Place | null> => {
@@ -369,6 +392,7 @@ export const submissionsApi = {
       image_url?: string;
       gallery_images?: string[];
       menu_images?: string[];
+      map_link?: string;
     }
   ): Promise<boolean> => {
     const response = await apiFetch(`${BASE_URL}api/admin/submissions/${id}/approve`, {
@@ -629,5 +653,108 @@ export const presenceApi = {
     } catch {
       return null;
     }
+  },
+};
+
+
+export const itinerariesApi = {
+  getAll: async (): Promise<Itinerary[]> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/itineraries`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (err) {
+      console.error('Failed to fetch itineraries:', err);
+      return [];
+    }
+  },
+
+  getById: async (id: number | string): Promise<Itinerary | null> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/itineraries/${id}`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (err) {
+      console.error(`Failed to fetch itinerary ${id}:`, err);
+      return null;
+    }
+  },
+
+  create: async (data: CreateItineraryData): Promise<Itinerary> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(errorData?.detail, 'Failed to create itinerary'));
+    }
+    return await response.json();
+  },
+
+  update: async (id: number | string, data: Partial<CreateItineraryData>): Promise<Itinerary> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(errorData?.detail, 'Failed to update itinerary'));
+    }
+    return await response.json();
+  },
+
+  delete: async (id: number | string): Promise<boolean> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries/${id}`, {
+      method: 'DELETE',
+    });
+    return response.ok;
+  },
+
+  addStop: async (
+    itineraryId: number | string,
+    stop: {
+      destination_id: number;
+      order_index: number;
+      transport_mode?: string;
+      note?: string;
+      conflict_mode?: 'shift' | 'replace';
+    }
+  ): Promise<ItineraryStop> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries/${itineraryId}/stops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stop),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(errorData?.detail, 'Failed to add stop'));
+    }
+    return await response.json();
+  },
+
+  updateStop: async (
+    stopId: number | string,
+    data: { transport_mode?: string; note?: string }
+  ): Promise<ItineraryStop> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries/stops/${stopId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(errorData?.detail, 'Failed to update stop'));
+    }
+    return await response.json();
+  },
+
+  deleteStop: async (stopId: number | string): Promise<boolean> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries/stops/${stopId}`, {
+      method: 'DELETE',
+    });
+    return response.ok;
   },
 };
