@@ -5,7 +5,7 @@ import json
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import func, inspect, or_, text
 from server.database import engine, Base, get_db, SessionLocal
 from SQLite import models
 from Submissions import schemas 
@@ -46,6 +46,16 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(bind = engine)
+
+
+def _add_missing_columns() -> None:
+    """create_all only makes new tables, so a column added to an existing table has to be added here."""
+    if "itinerary_id" not in {c["name"] for c in inspect(engine).get_columns("travel_groups")}:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE travel_groups ADD COLUMN itinerary_id INTEGER REFERENCES itineraries(id)"))
+
+
+_add_missing_columns()
 
 
 def _backfill_group_members() -> None:
@@ -1264,14 +1274,25 @@ def delete_notification(notification_id: int, db: Session = Depends(get_db), use
 # ITINERARIES ENDPOINTS
 # ==========================================
 
+# Itineraries are admin-only for now. To open them to every signed-in user, set this to False
+# along with ITINERARIES_ADMIN_ONLY in frontend/src/utils/features.ts
+ITINERARIES_ADMIN_ONLY = True
+
+
+def require_itinerary_viewer(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    if ITINERARIES_ADMIN_ONLY and not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required.")
+    return user
+
+
 @app.get("/api/itineraries", response_model=List[schemas.ItineraryResponse])
-def get_all_itineraries(db: Session = Depends(get_db)):
+def get_all_itineraries(db: Session = Depends(get_db), _viewer: CurrentUser = Depends(require_itinerary_viewer)):
     """Fetch all curated itineraries with their stops and destinations."""
     return db.query(models.Itinerary).order_by(models.Itinerary.created_at.desc()).all()
 
 
 @app.get("/api/itineraries/{itinerary_id}", response_model=schemas.ItineraryResponse)
-def get_itinerary_by_id(itinerary_id: int, db: Session = Depends(get_db)):
+def get_itinerary_by_id(itinerary_id: int, db: Session = Depends(get_db), _viewer: CurrentUser = Depends(require_itinerary_viewer)):
     """Fetch a single itinerary with all ordered stops."""
     itinerary = db.query(models.Itinerary).filter(models.Itinerary.id == itinerary_id).first()
     if not itinerary:

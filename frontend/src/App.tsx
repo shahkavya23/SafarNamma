@@ -7,6 +7,7 @@ import { Layout } from './components/layout/Layout';
 import { HomePage } from './pages/HomePage';
 import { SampleTripSheet } from './components/groups/SampleTripSheet';
 import { lazyPage } from './utils/lazyPage';
+import { ITINERARIES_ADMIN_ONLY } from './utils/features';
 
 // Every page but the landing one loads on first visit, so the home page doesn't wait on the whole app
 const ExplorePage = lazyPage(() => import('./pages/ExplorePage'), 'ExplorePage');
@@ -36,12 +37,12 @@ function App() {
             <Route index element={<HomePage />} />
             <Route path="explore" element={<ExplorePage />} />
             <Route path="itineraries" element={
-              <ProtectedRoute requireAdmin={true}>
+              <ProtectedRoute requireAdmin={ITINERARIES_ADMIN_ONLY}>
                 <ItinerariesPage />
               </ProtectedRoute>
             } />
             <Route path="itineraries/:id" element={
-              <ProtectedRoute requireAdmin={true}>
+              <ProtectedRoute requireAdmin={ITINERARIES_ADMIN_ONLY}>
                 <ItineraryDetailsPage />
               </ProtectedRoute>
             } />

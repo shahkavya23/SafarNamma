@@ -19,3 +19,31 @@ export const hoursMode = (open?: string | null, close?: string | null): HoursMod
 
 /** The value saved in both opening_hours and closing_hours for a special mode. */
 export const hoursMarker = (mode: Exclude<HoursMode, 'times'>) => (mode === '247' ? OPEN_24_7 : HOURS_IN_DESCRIPTION);
+
+/** "14:30" → "2:30 PM"; anything without a colon is returned as typed. */
+export const formatTime = (timeStr?: string | null) => {
+  if (!timeStr) return '';
+  if (!timeStr.includes(':')) return timeStr;
+  const [h, m] = timeStr.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return timeStr;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 || 12;
+  return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
+};
+
+/** "10:00 AM – 6:00 PM", "Open 24/7", "Check description" or "Hours not listed". */
+export const formatVisitingHours = (open?: string | null, close?: string | null) => {
+  if (!open && !close) return 'Hours not listed';
+  if (isOpen247(open, close)) return 'Open 24/7';
+  if (isHoursInDescription(open, close)) return 'Check description';
+  if (open && close) {
+    return `${formatTime(open)} – ${formatTime(close)}`;
+  }
+  if (open) {
+    if (open.toLowerCase().includes('to') || open.includes('-') || open.toLowerCase().includes('24')) {
+      return open;
+    }
+    return `Opens at ${formatTime(open)}`;
+  }
+  return `Closes at ${formatTime(close)}`;
+};

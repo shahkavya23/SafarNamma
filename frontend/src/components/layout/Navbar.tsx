@@ -23,6 +23,7 @@ import { useAuth } from '../../context/AuthContext';
 import { notificationsApi } from '../../api/client';
 import type { AppNotification } from '../../types';
 import { hasPhotoHero } from '../../utils/routes';
+import { ITINERARIES_ADMIN_ONLY } from '../../utils/features';
 import { setScrollLocked } from '../../hooks/useLenis';
 import { NavRoad, LOGO_HEIGHT } from './NavRoad';
 
@@ -98,7 +99,7 @@ export const Navbar = () => {
 
   const navLinks = [
     { name: 'Explore', path: '/explore' },
-    ...(isAdmin ? [{ name: 'Itineraries', path: '/itineraries' }] : []),
+    ...(isAdmin || !ITINERARIES_ADMIN_ONLY ? [{ name: 'Itineraries', path: '/itineraries' }] : []),
     { name: 'Groups', path: '/groups' },
     { name: 'Submit a place', path: '/submit' },
   ];

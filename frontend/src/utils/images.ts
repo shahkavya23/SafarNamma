@@ -56,6 +56,16 @@ export const PHOTOS = {
     alt: 'A traveller raising both arms towards the green, forested hills of Chikmagalur',
     credit: { name: 'Mayank Agarwal', url: 'https://unsplash.com/photos/man-in-blue-shirt-raising-his-hands-M-bDdjOE-JM' },
   },
+  commercialStreet: {
+    file: 'commercial-street', width: 1600, height: 1067, place: 'Commercial Street, Bengaluru',
+    alt: 'Commercial Street, Bengaluru, strung with festive lights over its shopfronts at night',
+    credit: { name: 'Saad Faruque', url: 'https://commons.wikimedia.org/wiki/File:Commercial_Street,_Bangalore_(7870975840).jpg' },
+  },
+  ubCityNight: {
+    file: 'ub-city-night', width: 1600, height: 1198, place: 'UB City, Bengaluru',
+    alt: 'UB City and Kingfisher Towers lit up at night, with Vidhana Soudha glowing in the distance',
+    credit: { name: 'Kshitiz Bathwal', url: 'https://commons.wikimedia.org/wiki/File:UB_City_at_night_.jpg' },
+  },
 } satisfies Record<string, Photo>;
 
 export type PhotoKey = keyof typeof PHOTOS;

@@ -34,6 +34,19 @@ export function scrollToTop() {
   window.scrollTo(0, 0);
 }
 
+/** Glide to an element. Goes through Lenis when it's running, because it cancels native smooth scrolling. */
+export function scrollToElement(el: HTMLElement, offset = 0) {
+  if (lenis) {
+    lenis.scrollTo(el, { offset });
+    return;
+  }
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({
+    top: el.getBoundingClientRect().top + window.scrollY + offset,
+    behavior: reduced ? 'auto' : 'smooth',
+  });
+}
+
 /** Pause page scrolling while a modal or sheet is open. */
 export function setScrollLocked(locked: boolean) {
   if (lenis) {

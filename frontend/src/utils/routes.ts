@@ -6,9 +6,10 @@ export const hasPhotoHero = (path: string) =>
   path === '/submit' ||
   path === '/profile' ||
   path.startsWith('/places/') ||
+  path.startsWith('/itineraries/') ||
   path.startsWith('/groups/');
 
 // Pages that manage their own top spacing (photo heroes, the light home hero, split-screen auth).
 // Every other page gets padding so its content starts below the navbar.
 export const isFullBleed = (path: string) =>
-  hasPhotoHero(path) || path === '/' || path === '/login' || path === '/register';
+  hasPhotoHero(path) || path === '/' || path === '/itineraries' || path === '/login' || path === '/register';

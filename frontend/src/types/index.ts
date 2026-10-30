@@ -49,6 +49,7 @@ export interface Group {
   id: number | string;
   destination_id?: number | null;
   custom_destination?: string | null;
+  itinerary_id?: number | null;
   place_id?: string | number; // For backwards compatibility
   title: string;
   description: string;
@@ -129,4 +130,41 @@ export interface AppNotification {
   link?: string | null;
   is_read: boolean;
   created_at: string;
+}
+
+
+export interface ItineraryStop {
+  id: number;
+  itinerary_id: number;
+  destination_id: number;
+  order_index: number;
+  transport_mode?: string | null;
+  note?: string | null;
+  destination?: Place;
+}
+
+export interface Itinerary {
+  id: number;
+  title: string;
+  description: string;
+  image_url?: string | null;
+  estimated_duration?: string | null;
+  estimated_budget?: number | null;
+  created_by_email: string;
+  created_at: string;
+  stops: ItineraryStop[];
+}
+
+export interface CreateItineraryData {
+  title: string;
+  description: string;
+  image_url?: string;
+  estimated_duration?: string;
+  estimated_budget?: number;
+  stops: {
+    destination_id: number;
+    order_index: number;
+    transport_mode?: string;
+    note?: string;
+  }[];
 }
