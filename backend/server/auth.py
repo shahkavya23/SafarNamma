@@ -33,7 +33,11 @@ _DEFAULT_ADMINS = (
     "kavya.25bcs10125@sst.scaler.com,"
     "pratishtha.26bcs10247@sst.scaler.com,"
     "bhavya.26bcs10191@sst.scaler.com,"
-    "angan.25bcs10027@sst.scaler.com"
+    "angan.25bcs10027@sst.scaler.com,"
+    "shahid.26bcs10134@sst.scaler.com,"
+    "shaik.26bcs10385@sst.scaler.com,"
+    "vipin.26bcs10552@sst.scaler.com,"
+    "bhavy.25bcs10212@sst.scaler.com"
 )
 ADMIN_EMAILS = {
     e.strip().lower() for e in os.getenv("ADMIN_EMAILS", _DEFAULT_ADMINS).split(",") if e.strip()
