@@ -139,7 +139,7 @@ export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdm
         {locked ? (
           <LockedRoute rows={MIN_ROWS} />
         ) : stops.length === 0 ? (
-          <p className="py-3 text-sm text-muted">Stops for this route are being mapped out.</p>
+          <EmptyRoute rows={MIN_ROWS} />
         ) : (
           <ol ref={listRef} key={isActive ? 'front' : 'back'} className="relative" style={{ height: rowCount * ROW_HEIGHT }}>
             {/* Track, the inked line, and the traveller walking it */}
@@ -319,6 +319,33 @@ const LockedRoute = ({ rows }: { rows: number }) => (
       </span>
       <p className="text-sm font-semibold text-ink leading-snug max-w-[18rem] [text-shadow:0_0_12px_var(--color-paper,#fff)]">
         {UNLOCK_RULE}
+      </p>
+    </div>
+  </div>
+);
+
+/** A route with no stops yet keeps the same room as a short one, so its photo isn't
+    stretched tall and cropped. Dashed stand-in stops sit behind the note. */
+const EmptyRoute = ({ rows }: { rows: number }) => (
+  <div className="relative" style={{ height: rows * ROW_HEIGHT }}>
+    <div aria-hidden className="pointer-events-none select-none">
+      <div
+        className="absolute left-[17px] w-0 border-l-2 border-dashed border-line"
+        style={{ top: ROW_HEIGHT / 2, bottom: ROW_HEIGHT / 2 }}
+      />
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="relative flex items-center gap-3" style={{ height: ROW_HEIGHT }}>
+          <span className="shrink-0 w-9 h-9 rounded-full bg-paper border-2 border-dashed border-line" />
+          <span className="flex-1 space-y-1.5 opacity-60">
+            <span className="block h-2 w-14 rounded-full bg-stone" />
+            <span className="block h-3 rounded-full bg-stone/70" style={{ width: `${62 - (i % 3) * 12}%` }} />
+          </span>
+        </div>
+      ))}
+    </div>
+    <div className="absolute inset-0 flex items-center justify-center pl-14 pr-2">
+      <p className="px-3 py-1.5 rounded-full bg-paper border border-line text-xs font-semibold text-muted shadow-sm">
+        Stops are being mapped out
       </p>
     </div>
   </div>
