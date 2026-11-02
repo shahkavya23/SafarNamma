@@ -40,7 +40,10 @@ _DEFAULT_ADMINS = (
     "bhavy.25bcs10212@sst.scaler.com"
 )
 ADMIN_EMAILS = {
-    e.strip().lower() for e in os.getenv("ADMIN_EMAILS", _DEFAULT_ADMINS).split(",") if e.strip()
+    # The env var adds to the list above instead of replacing it, so admins listed here can't be dropped
+    e.strip().lower()
+    for e in f"{_DEFAULT_ADMINS},{os.getenv('ADMIN_EMAILS', '')}".split(",")
+    if e.strip()
 }
 
 SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
