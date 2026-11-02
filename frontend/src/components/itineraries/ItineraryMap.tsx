@@ -17,6 +17,26 @@ declare global {
 }
 
 // Resilient coordinate extractor: checks latitude/longitude, or extracts from Google Maps link
+// The navbar's jeep, drawn facing right with its wheels on the route line
+const CAR_SVG = `
+  <svg viewBox="-15 -20 30 20" width="42" height="28" style="overflow:visible">
+    <ellipse cx="0" cy="-1" rx="12" ry="1.6" fill="#10272B" opacity="0.22" />
+    <rect x="-13.5" y="-10.5" width="2.4" height="5" rx="1" fill="#16353A" />
+    <rect x="-11.5" y="-11.5" width="23" height="6.5" rx="2" fill="#2A7C84" stroke="#fff" stroke-width="0.6" />
+    <path d="M -8 -11.5 L -6 -16.5 L 3.5 -16.5 L 6 -11.5 Z" fill="#2A7C84" stroke="#fff" stroke-width="0.6" />
+    <path d="M -5.2 -12.2 L -4 -15.3 L 2.6 -15.3 L 4.3 -12.2 Z" fill="#BFE6E8" opacity="0.9" />
+    <rect x="-6.5" y="-18" width="9.5" height="1.2" rx="0.6" fill="#16353A" />
+    <circle cx="10.6" cy="-8.6" r="1.2" fill="#F2C94C" />
+    <circle cx="-6.5" cy="-4.2" r="2.9" fill="#10272B" />
+    <circle cx="-6.5" cy="-4.2" r="1.1" fill="#C9D4D2" />
+    <circle cx="6.5" cy="-4.2" r="2.9" fill="#10272B" />
+    <circle cx="6.5" cy="-4.2" r="1.1" fill="#C9D4D2" />
+  </svg>
+`;
+
+const SECONDS_PER_LEG = 2.8; // average drive time between two stops
+const END_PAUSE = 1.2; // seconds parked at the last stop before looping
+
 export const getStopCoords = (stop: ItineraryStop): [number, number] | null => {
   const dest = stop.destination;
   if (!dest) return null;
@@ -226,6 +246,76 @@ export const ItineraryMap: React.FC<ItineraryMapProps> = ({
       map.invalidateSize();
     }, 250);
   }, [leafletLoaded, stops, activeStopId]);
+
+  // Jeep that drives the route 1 → 2 → … → last on a loop. Kept separate from the
+  // marker effect so selecting a stop doesn't restart the drive.
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!leafletLoaded || !map || !window.L) return;
+    const L = window.L;
+
+    const route = stops.map(getStopCoords).filter((c): c is [number, number] => c !== null);
+    if (route.length < 2) return;
+
+    // Interpolate in projected (Web Mercator) space so the jeep stays exactly on the drawn line
+    const crs = map.options.crs;
+    const points = route.map((c) => crs.project(L.latLng(c)));
+    const legLengths = points.slice(1).map((p: any, i: number) => p.distanceTo(points[i]));
+    const total = legLengths.reduce((a: number, b: number) => a + b, 0);
+    if (total === 0) return;
+    const driveTime = SECONDS_PER_LEG * legLengths.length;
+
+    const car = L.marker(route[0], {
+      icon: L.divIcon({
+        html: `<div class="route-car" style="transform-origin:50% 92%;pointer-events:none">${CAR_SVG}</div>`,
+        className: 'route-car-icon',
+        iconSize: [42, 28],
+        iconAnchor: [21, 26],
+      }),
+      interactive: false,
+      keyboard: false,
+      zIndexOffset: 500,
+    }).addTo(map);
+
+    const placeCar = (distance: number) => {
+      let leg = 0;
+      while (leg < legLengths.length - 1 && distance > legLengths[leg]) {
+        distance -= legLengths[leg];
+        leg++;
+      }
+      const a = points[leg];
+      const b = points[leg + 1];
+      const t = legLengths[leg] ? Math.min(distance / legLengths[leg], 1) : 1;
+      car.setLatLng(crs.unproject(L.point(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)));
+
+      // Face the direction of travel: mirror when heading west, tilt with the slope
+      const dx = b.x - a.x;
+      const screenDy = -(b.y - a.y); // projected y points north, screen y points down
+      const tilt = (Math.atan2(screenDy, Math.abs(dx)) * 180) / Math.PI;
+      const el = car.getElement()?.querySelector('.route-car') as HTMLElement | null;
+      if (el) el.style.transform = dx < 0 ? `rotate(${-tilt}deg) scaleX(-1)` : `rotate(${tilt}deg)`;
+    };
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      placeCar(0);
+      return () => car.remove();
+    }
+
+    let frame = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const elapsed = ((now - start) / 1000) % (driveTime + END_PAUSE);
+      const progress = Math.min(elapsed / driveTime, 1);
+      placeCar(progress * total);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      car.remove();
+    };
+  }, [leafletLoaded, stops]);
 
   const unmapped = stops
     .map((stop, i) => ({ stop, number: i + 1, name: stop.destination?.name ?? 'Unnamed stop' }))
