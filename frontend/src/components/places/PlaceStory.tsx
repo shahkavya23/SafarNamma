@@ -1,10 +1,12 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
 import {
   ArrowRight,
   ArrowUpRight,
+  ChevronDown,
   Clock,
   Film,
+  IndianRupee,
   Landmark,
   MapPin,
   Mountain,
@@ -15,7 +17,7 @@ import {
   Waves,
   type LucideIcon,
 } from 'lucide-react';
-import type { Highlight, PlaceSections } from '../../utils/describePlace';
+import { sentences, splitLabel, type Highlight, type PlaceSections } from '../../utils/describePlace';
 import { cn } from '../../utils/cn';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -47,15 +49,16 @@ const ScrollInk = ({ text, className }: { text: string; className?: string }) =>
 
 /** An icon that fits the highlight's label, from its words. */
 const ICONS: [RegExp, LucideIcon][] = [
-  [/shop|brand|market|luxury|store|bazaar/i, ShoppingBag],
-  [/dining|food|cafe|eat|restaurant|nightlife|drink/i, UtensilsCrossed],
-  [/entertain|movie|cinema|theat|game|arcade|music|show/i, Film],
-  [/architect|history|heritage|temple|fort|palace|monument|ambian/i, Landmark],
-  [/trek|hill|peak|view|summit|mountain/i, Mountain],
-  [/garden|nature|park|forest|wildlife|bird/i, Trees],
-  [/water|lake|beach|falls|river|boat/i, Waves],
+  [/\b(?:shop|brand|market|luxury|store|bazaar)/i, ShoppingBag],
+  [/\b(?:dining|food|cafe|eat|restaurant|nightlife|drink)/i, UtensilsCrossed],
+  [/\b(?:entertain|movie|cinema|theat|game|arcade|music|show)/i, Film],
+  [/\b(?:architect|history|heritage|temple|fort|palace|monument|ambian|dome)/i, Landmark],
+  [/\b(?:trek|hill|peak|view|summit|mountain)/i, Mountain],
+  [/\b(?:garden|nature|park|forest|wildlife|bird)/i, Trees],
+  [/\b(?:water|lake|beach|falls|river|boat)/i, Waves],
 ];
-const iconFor = (h: Highlight) => ICONS.find(([re]) => re.test(`${h.title ?? ''} ${h.text}`))?.[1] ?? Sparkles;
+const iconFor = (h: Highlight) =>
+  ICONS.find(([re]) => re.test(h.title ?? ''))?.[1] ?? ICONS.find(([re]) => re.test(h.text))?.[1] ?? Sparkles;
 
 /** "Features A, B, and C." → a lead-in verb and the things it lists, so a list reads as chips. Null if it isn't a list. */
 const listOf = (text: string) => {
@@ -199,104 +202,220 @@ const HighlightExplorer = ({ items }: { items: Highlight[] }) => {
   );
 };
 
-/* Unlabelled highlights: cards that rise in one after another. */
-const HighlightCards = ({ items }: { items: Highlight[] }) => (
-  <ol className="grid sm:grid-cols-2 gap-3">
-    {items.map((h, i) => {
-      const Icon = iconFor(h);
-      return (
-        <motion.li
-          key={i}
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.4 }}
-          transition={{ duration: 0.6, ease: EASE, delay: (i % 2) * 0.08 }}
-          className="group rounded-[20px] bg-paper border border-line p-5 transition-[border-color,translate,box-shadow] duration-300 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-[0_18px_40px_-24px_rgba(16,42,46,0.35)]"
+/* A single highlight: shown open, there's nothing to choose between. */
+const HighlightCard = ({ h }: { h: Highlight }) => {
+  const Icon = iconFor(h);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.4 }}
+      transition={{ duration: 0.6, ease: EASE }}
+      className="rounded-[24px] bg-paper border border-line p-6 sm:p-7"
+    >
+      <div className="flex items-center gap-3 mb-4">
+        <span className="w-11 h-11 rounded-2xl bg-accent-soft text-accent-text flex items-center justify-center shrink-0">
+          <Icon className="w-5 h-5" />
+        </span>
+        <h3 className="font-display text-2xl text-ink leading-tight">{h.title}</h3>
+      </div>
+      <HighlightBody h={h} />
+    </motion.div>
+  );
+};
+
+/* ── Plan your visit: timings, entry and where, each a row that opens to show everything ── */
+
+type VisitKey = 'when' | 'cost' | 'where';
+
+/** A line, with its own label ("Inside Tour Timings") in bold when it has one. */
+const VisitLine = ({ line }: { line: string }) => {
+  const { label, text } = splitLabel(line);
+  return (
+    <p className="text-ink leading-relaxed">
+      {label && <span className="font-semibold">{label}: </span>}
+      {text}
+    </p>
+  );
+};
+
+const VisitRow = ({
+  id,
+  icon: Icon,
+  label,
+  lines,
+  href,
+  open,
+  onToggle,
+}: {
+  id: VisitKey;
+  icon: LucideIcon;
+  label: string;
+  lines: string[];
+  href?: string;
+  open: boolean;
+  onToggle: () => void;
+}) => {
+  const reduced = useReducedMotion();
+  const [first, ...rest] = lines;
+  const more = rest.length > 0 || !!href;
+  const panelId = `visit-${id}-panel`;
+  return (
+    <div
+      id={id === 'when' ? 'place-timings' : undefined}
+      className={cn(
+        'scroll-mt-32 rounded-[20px] bg-paper border transition-[border-color,box-shadow] duration-300',
+        open ? 'border-line-strong shadow-[0_18px_40px_-24px_rgba(16,42,46,0.35)]' : 'border-line hover:border-line-strong'
+      )}
+    >
+      <button
+        type="button"
+        onClick={more ? onToggle : undefined}
+        aria-expanded={more ? open : undefined}
+        aria-controls={more ? panelId : undefined}
+        className={cn(
+          'group w-full flex items-start gap-4 p-5 text-left rounded-[20px] outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
+          !more && 'cursor-default'
+        )}
+      >
+        <span className="w-11 h-11 rounded-2xl bg-sage-soft text-sage-text flex items-center justify-center shrink-0">
+          <Icon className="w-5 h-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-label text-muted mb-1.5">{label}</p>
+          <VisitLine line={first} />
+          {more && !open && (
+            <p className="mt-1.5 text-sm font-bold text-accent-text group-hover:text-ink transition-colors">
+              {rest.length ? `+ ${rest.length} more` : 'Show on map'}
+            </p>
+          )}
+        </div>
+        {more && (
+          <ChevronDown className={cn('w-5 h-5 mt-3 shrink-0 text-muted transition-transform duration-300 group-hover:text-ink', open && 'rotate-180')} />
+        )}
+      </button>
+      <AnimatePresence initial={false}>
+        {open && more && (
+          <motion.div
+            id={panelId}
+            className="overflow-hidden"
+            initial={reduced ? false : { height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={reduced ? undefined : { height: 0, opacity: 0 }}
+            transition={{ duration: 0.35, ease: EASE }}
+          >
+            <div className="pl-5 sm:pl-[4.75rem] pr-5 pb-5 -mt-1 space-y-2">
+              {rest.map((line, i) => (
+                <VisitLine key={i} line={line} />
+              ))}
+              {href && (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group/map inline-flex items-center gap-1 pt-1 text-sm font-bold text-accent-text hover:text-ink transition-colors"
+                >
+                  Open in Maps <ArrowUpRight className="w-3.5 h-3.5 transition-transform group-hover/map:translate-x-0.5 group-hover/map:-translate-y-0.5" />
+                </a>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+/** Opens a "Plan your visit" row from elsewhere on the page (the Hours fact's "Check description"). */
+export const openVisitRow = (key: VisitKey) => window.dispatchEvent(new CustomEvent('place-visit:open', { detail: key }));
+
+/* ── Intro: the first two sentences, the rest behind "Read more" ── */
+const INTRO_SENTENCES = 2;
+
+const Intro = ({ paragraphs }: { paragraphs: string[] }) => {
+  const [expanded, setExpanded] = useState(false);
+  const lead = sentences(paragraphs[0]);
+  const long = lead.length > INTRO_SENTENCES + 1 || paragraphs.length > 1;
+  const shown = expanded || !long ? paragraphs : [lead.slice(0, INTRO_SENTENCES).join(' ')];
+  return (
+    <div className="space-y-4 max-w-[64ch]">
+      {shown.map((para, i) => (
+        <ScrollInk
+          key={`${i}-${expanded}`}
+          text={para}
+          className={cn('leading-[1.75]', i === 0 ? 'text-ink text-xl sm:text-2xl font-medium' : 'text-body text-lg')}
+        />
+      ))}
+      {long && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="inline-flex items-center gap-1.5 text-sm font-bold text-accent-text hover:text-ink transition-colors"
         >
-          <div className="flex items-center gap-3 mb-2">
-            <span className="w-8 h-8 rounded-xl bg-accent-soft text-accent-text flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110">
-              <Icon className="w-4 h-4" />
-            </span>
-            {h.title && <h3 className="font-display text-lg text-ink leading-snug">{h.title}</h3>}
-          </div>
-          <p className="text-body leading-relaxed">{h.text}</p>
-        </motion.li>
-      );
-    })}
-  </ol>
-);
+          {expanded ? 'Show less' : 'Read more'}
+          <ChevronDown className={cn('w-4 h-4 transition-transform duration-300', expanded && 'rotate-180')} />
+        </button>
+      )}
+    </div>
+  );
+};
 
 /* ─── The description, as something to read through ───
-   The intro inks in as you scroll; where / when are cards (where opens the map); the highlights
-   are tabs you step through, each list shown as chips. Empty parts are left out. */
+   First what a visitor needs to plan (timings, entry, where), each a row that opens; then the intro;
+   then the highlights as tabs to step through. Empty parts are left out. */
 export const PlaceStory = ({ sections, mapUrl }: { sections: PlaceSections; mapUrl?: string | null }) => {
-  const facts = [
-    { key: 'where', icon: MapPin, label: 'Where it is', lines: sections.where, href: mapUrl ?? undefined },
-    { key: 'when', icon: Clock, label: 'When to go', lines: sections.when, href: undefined },
-  ].filter((f) => f.lines.length);
-  const labelled = sections.highlights.length > 1 && sections.highlights.every((h) => h.title);
+  const visit = [
+    { id: 'when' as const, icon: Clock, label: 'Timings', lines: sections.when, href: undefined },
+    { id: 'cost' as const, icon: IndianRupee, label: 'Entry & tickets', lines: sections.cost, href: undefined },
+    { id: 'where' as const, icon: MapPin, label: 'Where it is', lines: sections.where, href: mapUrl ?? undefined },
+  ].filter((v) => v.lines.length);
 
-  if (!sections.about.length && !facts.length && !sections.highlights.length) {
+  const [open, setOpen] = useState<Set<VisitKey>>(new Set());
+  const toggle = (key: VisitKey) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  useEffect(() => {
+    const onOpen = (e: Event) => setOpen((prev) => new Set(prev).add((e as CustomEvent<VisitKey>).detail));
+    window.addEventListener('place-visit:open', onOpen);
+    return () => window.removeEventListener('place-visit:open', onOpen);
+  }, []);
+
+  if (!sections.about.length && !visit.length && !sections.highlights.length) {
     return <p className="text-muted text-lg">No description yet. Been here? Leave a review below and tell people what it's like.</p>;
   }
 
   return (
     <div className="space-y-10">
-      {sections.about.length > 0 && (
-        <div className="space-y-4 max-w-[64ch]">
-          {sections.about.map((para, i) => (
-            <ScrollInk key={i} text={para} className={cn('leading-[1.75]', i === 0 ? 'text-ink text-xl sm:text-2xl font-medium' : 'text-body text-lg')} />
-          ))}
-        </div>
-      )}
-
-      {facts.length > 0 && (
-        <div className={cn('grid gap-3', facts.length > 1 && 'sm:grid-cols-2')}>
-          {facts.map(({ key, icon: Icon, label, lines, href }, i) => {
-            const body = (
-              <>
-                <span className="w-11 h-11 rounded-2xl bg-sage-soft text-sage-text flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:-translate-y-0.5">
-                  <Icon className="w-5 h-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-label text-muted mb-1.5">{label}</p>
-                  {lines.map((line, j) => (
-                    <p key={j} className="text-ink leading-relaxed [&+&]:mt-1.5">{line}</p>
-                  ))}
-                  {href && (
-                    <span className="inline-flex items-center gap-1 mt-2.5 text-sm font-bold text-accent-text group-hover:text-ink transition-colors">
-                      Open in Maps <ArrowUpRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                    </span>
-                  )}
-                </div>
-              </>
-            );
-            const card = 'group flex gap-4 rounded-[20px] bg-paper border border-line p-5 transition-[border-color,box-shadow] duration-300';
-            return (
+      {visit.length > 0 && (
+        <div>
+          <p className="section-label mb-5">Plan your visit</p>
+          <div className="space-y-3">
+            {visit.map((v, i) => (
               <motion.div
-                key={key}
+                key={v.id}
                 initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, amount: 0.5 }}
                 transition={{ duration: 0.6, ease: EASE, delay: i * 0.08 }}
               >
-                {href ? (
-                  <a href={href} target="_blank" rel="noopener noreferrer" className={cn(card, 'hover:border-line-strong hover:shadow-[0_18px_40px_-24px_rgba(16,42,46,0.35)]')}>
-                    {body}
-                  </a>
-                ) : (
-                  <div className={card}>{body}</div>
-                )}
+                <VisitRow {...v} open={open.has(v.id)} onToggle={() => toggle(v.id)} />
               </motion.div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       )}
+
+      {sections.about.length > 0 && <Intro paragraphs={sections.about} />}
 
       {sections.highlights.length > 0 && (
         <div>
           <p className="section-label mb-5">What to see & do</p>
-          {labelled ? <HighlightExplorer items={sections.highlights} /> : <HighlightCards items={sections.highlights} />}
+          {sections.highlights.length > 1 ? <HighlightExplorer items={sections.highlights} /> : <HighlightCard h={sections.highlights[0]} />}
         </div>
       )}
     </div>

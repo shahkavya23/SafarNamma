@@ -36,7 +36,7 @@ import { categoryIcon } from '../utils/categories';
 import { formatVisitingHours, isHoursInDescription, isOpen247 } from '../utils/hours';
 import { describePlace } from '../utils/describePlace';
 import { budgetLevel, durationNote, hoursStatus, seasonStatus } from '../utils/visitInfo';
-import { PlaceStory } from '../components/places/PlaceStory';
+import { PlaceStory, openVisitRow } from '../components/places/PlaceStory';
 import { PlaceReviews } from '../components/places/PlaceReviews';
 
 export const PlaceDetailsPage = () => {
@@ -251,7 +251,11 @@ export const PlaceDetailsPage = () => {
       value: isHoursInDescription(place.opening_hours, place.closing_hours) ? (
         <button
           type="button"
-          onClick={() => jumpTo('place-story')}
+          onClick={() => {
+            // Open the Timings row in the story and land on it; the story itself if there isn't one
+            openVisitRow('when');
+            jumpTo(document.getElementById('place-timings') ? 'place-timings' : 'place-story');
+          }}
           className="text-left underline decoration-accent/50 underline-offset-4 hover:text-accent-text transition-colors"
         >
           Check description
@@ -276,7 +280,7 @@ export const PlaceDetailsPage = () => {
     { label: 'Submitted by', value: submitterName },
   ];
 
-  // The description sorted into where / when / what to see; empty parts are left out
+  // The description sorted into timings / entry / where / what to see; empty parts are left out
   const sections = describePlace(place.description);
   const mapUrl =
     place.map_link || (place.latitude != null && place.longitude != null ? `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}` : null);
