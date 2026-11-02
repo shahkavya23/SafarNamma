@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { AlertTriangle, CheckCircle, MessageSquare, PenLine, Star } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle, EyeOff, MessageSquare, PenLine, Plus, Send, Star } from 'lucide-react';
 import type { Review } from '../../types';
 import { Chip } from '../ui/Chip';
 import { cn } from '../../utils/cn';
@@ -10,6 +10,8 @@ const RATING_WORDS = ['', 'Skip it', 'Not great', 'It was okay', 'Really good', 
 // Tapping a prompt adds it as a line to start from, so a review covers what the next visitor asks
 const PROMPTS = ['Best time to go', 'Parking', 'Food nearby', 'Crowds', 'Tickets & entry', 'Good for'];
 const LONG_REVIEW = 260;
+// A nudge toward detail as the review grows: empty, short, decent, rich
+const QUALITY_WORDS = ['A couple of sentences is perfect', 'Keep going', 'Good detail', 'Really helpful'];
 
 type Sort = 'newest' | 'highest' | 'lowest';
 const SORTS: { key: Sort; label: string }[] = [
@@ -112,16 +114,44 @@ export const PlaceReviews = ({ placeName, rating, reviews, loading, onPost }: Pl
   }, [reviews, sort, starFilter]);
 
   const live = hoverRating || newRating;
+  const length = comment.trim().length;
+  const quality = !length ? 0 : length < 40 ? 1 : length < 140 ? 2 : 3;
+  const usedPrompts = useMemo(() => {
+    const lines = comment.split('\n');
+    return new Set(PROMPTS.filter((p) => lines.some((l) => l.startsWith(`${p}:`))));
+  }, [comment]);
 
-  const addPrompt = (p: string) => {
-    setComment((c) => `${c}${c && !c.endsWith('\n') ? '\n' : ''}${p}: `);
-    setPosted(false);
+  // The box grows with the text, up to its max height
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [comment]);
+
+  /** Puts the cursor at `at`, after React has rendered the new text. */
+  const focusAt = (at: (value: string) => number) =>
     requestAnimationFrame(() => {
       const el = textRef.current;
       if (!el) return;
+      const i = at(el.value);
       el.focus();
-      el.setSelectionRange(el.value.length, el.value.length);
+      el.setSelectionRange(i, i);
     });
+
+  const addPrompt = (p: string) => {
+    if (usedPrompts.has(p)) {
+      // Already started: jump to the end of that line instead of adding it twice
+      focusAt((v) => {
+        const lines = v.split('\n');
+        const row = lines.findIndex((l) => l.startsWith(`${p}:`));
+        return lines.slice(0, row + 1).join('\n').length;
+      });
+      return;
+    }
+    setComment((c) => `${c}${c && !c.endsWith('\n') ? '\n' : ''}${p}: `);
+    setPosted(false);
+    focusAt((v) => v.length);
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -247,13 +277,13 @@ export const PlaceReviews = ({ placeName, rating, reviews, loading, onPost }: Pl
 
       {/* Leave a review */}
       <form id="write-review" onSubmit={submit} className="scroll-mt-32 rounded-[24px] bg-paper border border-line p-6 sm:p-8 card-shadow">
-        <div className="flex items-start gap-4 mb-6">
-          <span className="w-11 h-11 rounded-2xl bg-sage-soft text-sage-text flex items-center justify-center shrink-0">
+        <div className="flex items-start gap-4 pb-6 mb-6 border-b border-line">
+          <span className="w-11 h-11 rounded-2xl bg-sage-soft text-sage-text flex items-center justify-center shrink-0 -rotate-3">
             <PenLine className="w-5 h-5" />
           </span>
           <div>
             <h3 className="font-display text-2xl text-ink leading-tight">Been here? Leave a review</h3>
-            <p className="text-sm text-muted mt-1">Tips on timing, parking or the best viewpoints help the next traveller.</p>
+            <p className="text-sm text-muted mt-1">Tips on timing, parking or the best viewpoints help the next traveller to {placeName}.</p>
           </div>
         </div>
 
@@ -279,8 +309,8 @@ export const PlaceReviews = ({ placeName, rating, reviews, loading, onPost }: Pl
         )}
 
         {/* Rating, with a word that says what it means */}
-        <p className="text-label text-muted mb-2">Your rating</p>
-        <div className="flex items-center gap-4 mb-6">
+        <p className="text-label text-muted mb-2.5">Your rating</p>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-7 rounded-2xl bg-sand/70 border border-line px-4 py-3 sm:w-fit">
           <div className="flex items-center gap-1" onMouseLeave={() => setHoverRating(0)} role="radiogroup" aria-label="Your rating">
             {[1, 2, 3, 4, 5].map((star) => (
               <button
@@ -291,17 +321,31 @@ export const PlaceReviews = ({ placeName, rating, reviews, loading, onPost }: Pl
                 aria-label={`${star} star${star > 1 ? 's' : ''}, ${RATING_WORDS[star]}`}
                 onClick={() => setNewRating(star)}
                 onMouseEnter={() => setHoverRating(star)}
-                className="p-1 -m-0.5 rounded-lg transition-transform hover:scale-115 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                className="p-1 -m-0.5 rounded-lg transition-transform hover:scale-115 active:scale-90 outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
-                <Star className={cn('w-8 h-8 transition-colors', star <= live ? 'text-gold fill-gold' : 'text-stone-deep fill-stone')} />
+                {/* Re-keyed on each pick so the chosen stars pop in a quick wave */}
+                <motion.span
+                  key={`${star}-${newRating}`}
+                  className="block"
+                  initial={reduced || star > newRating ? false : { scale: 0.6 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 520, damping: 14, delay: star * 0.035 }}
+                >
+                  <Star
+                    className={cn(
+                      'w-8 h-8 transition-colors duration-200',
+                      star <= live ? 'text-gold fill-gold drop-shadow-[0_3px_6px_rgba(201,154,59,0.35)]' : 'text-stone-deep fill-stone'
+                    )}
+                  />
+                </motion.span>
               </button>
             ))}
           </div>
-          <span className="relative inline-grid">
+          <span className="relative inline-grid min-w-[7.5rem]">
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.span
                 key={live}
-                className="[grid-area:1/1] font-display text-lg text-ink whitespace-nowrap"
+                className="[grid-area:1/1] font-display text-xl text-ink whitespace-nowrap"
                 initial={reduced ? false : { opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={reduced ? undefined : { opacity: 0, y: -8 }}
@@ -313,50 +357,89 @@ export const PlaceReviews = ({ placeName, rating, reviews, loading, onPost }: Pl
           </span>
         </div>
 
-        {/* Prompts that start a line */}
-        <label htmlFor="review-comment" className="text-label text-muted block mb-2">
+        {/* Prompts that start a line; a used one turns sage and jumps back to its line */}
+        <label htmlFor="review-comment" className="text-label text-muted block mb-2.5">
           Your experience
         </label>
         <div className="flex flex-wrap gap-2 mb-3">
-          {PROMPTS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => addPrompt(p)}
-              className="rounded-full border border-line bg-sand px-3 py-1.5 text-xs font-semibold text-body hover:border-ink hover:text-ink active:scale-95 transition-[border-color,color,scale]"
-            >
-              + {p}
-            </button>
-          ))}
+          {PROMPTS.map((p) => {
+            const used = usedPrompts.has(p);
+            return (
+              <button
+                key={p}
+                type="button"
+                aria-pressed={used}
+                onClick={() => addPrompt(p)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold active:scale-95 transition-[border-color,background-color,color,scale] duration-200',
+                  used ? 'border-sage/40 bg-sage-soft text-sage-text' : 'border-line bg-sand text-body hover:border-ink hover:text-ink'
+                )}
+              >
+                {used ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5 opacity-60" />}
+                {p}
+              </button>
+            );
+          })}
         </div>
-        <textarea
-          ref={textRef}
-          id="review-comment"
-          rows={4}
-          value={comment}
-          onChange={(e) => {
-            setComment(e.target.value);
-            setPosted(false);
-            if (error) setError(null);
-          }}
-          placeholder="What did you love? Tap a prompt above to start a line."
-          className="field resize-y"
-        />
 
-        <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
-          <span className="text-xs text-muted">
-            {comment.trim().length ? `${comment.trim().length} characters · a couple of sentences is perfect` : 'Posted as a traveller, without your name.'}
+        {/* One composer: the text, then how helpful it reads so far */}
+        <div
+          className={cn(
+            'rounded-[18px] border bg-white/60 transition-[border-color,box-shadow,background-color] duration-200',
+            'border-line-strong hover:border-[rgba(16,42,46,0.32)] focus-within:!border-ink focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(16,42,46,0.08)]'
+          )}
+        >
+          <textarea
+            ref={textRef}
+            id="review-comment"
+            rows={4}
+            value={comment}
+            onChange={(e) => {
+              setComment(e.target.value);
+              setPosted(false);
+              if (error) setError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) e.currentTarget.form?.requestSubmit();
+            }}
+            placeholder="What did you love? Tap a prompt above to start a line."
+            className="block w-full min-h-[7.5rem] max-h-[22rem] resize-none bg-transparent px-4 pt-3.5 pb-2 text-ink leading-relaxed placeholder:text-[#8A938F] outline-none"
+          />
+          <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-1">
+            <div className="flex items-center gap-2.5" aria-live="polite">
+              <span className="flex gap-1" aria-hidden>
+                {[1, 2, 3].map((n) => (
+                  <span
+                    key={n}
+                    className={cn('h-1.5 w-5 rounded-full transition-colors duration-300', n <= quality ? (quality === 3 ? 'bg-sage' : 'bg-gold') : 'bg-stone')}
+                  />
+                ))}
+              </span>
+              <span className={cn('text-xs font-semibold transition-colors', quality === 3 ? 'text-sage-text' : 'text-muted')}>{QUALITY_WORDS[quality]}</span>
+            </div>
+            <span className="text-[11px] tabular-nums text-faint">{length || ''}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-5">
+          <span className="flex items-center gap-1.5 text-xs text-muted">
+            <EyeOff className="w-3.5 h-3.5" /> Posted as a traveller, without your name.
           </span>
-          <button type="submit" disabled={posting} className="btn-primary">
-            {posting ? (
-              <>
-                <span className="w-4 h-4 border-2 border-sand/50 border-t-transparent rounded-full animate-spin" />
-                Posting…
-              </>
-            ) : (
-              'Post review'
-            )}
-          </button>
+          <div className="flex items-center gap-3 ml-auto">
+            <span className="hidden sm:inline text-[11px] text-faint">Ctrl + Enter</span>
+            <button type="submit" disabled={posting || !length} className="btn-primary">
+              {posting ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-sand/50 border-t-transparent rounded-full animate-spin" />
+                  Posting…
+                </>
+              ) : (
+                <>
+                  Post review <Send className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </form>
     </div>
