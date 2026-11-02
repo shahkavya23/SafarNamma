@@ -301,12 +301,29 @@ export const ItineraryMap: React.FC<ItineraryMapProps> = ({
       return () => car.remove();
     }
 
+    // The drive time holds at the zoom that fits the whole route. Zoomed in, the same
+    // distance spans more of the screen, so the jeep slows to keep its on-screen speed.
+    const fitZoom = Math.min(15, map.getBoundsZoom(L.latLngBounds(route), false, L.point(100, 100)));
+    const fitSpeed = total / driveTime;
+
     let frame = 0;
-    const start = performance.now();
+    let last = performance.now();
+    let distance = 0;
+    let parked = 0;
     const tick = (now: number) => {
-      const elapsed = ((now - start) / 1000) % (driveTime + END_PAUSE);
-      const progress = Math.min(elapsed / driveTime, 1);
-      placeCar(progress * total);
+      // Capped so a backgrounded tab doesn't jump the jeep ahead when it comes back
+      const dt = Math.min((now - last) / 1000, 0.1);
+      last = now;
+      if (distance >= total) {
+        parked += dt;
+        if (parked >= END_PAUSE) {
+          distance = 0;
+          parked = 0;
+        }
+      } else {
+        distance = Math.min(total, distance + dt * fitSpeed * 2 ** (fitZoom - map.getZoom()));
+      }
+      placeCar(distance);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
