@@ -53,6 +53,9 @@ def _add_missing_columns() -> None:
     if "itinerary_id" not in {c["name"] for c in inspect(engine).get_columns("travel_groups")}:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE travel_groups ADD COLUMN itinerary_id INTEGER REFERENCES itineraries(id)"))
+    if "is_featured" not in {c["name"] for c in inspect(engine).get_columns("itineraries")}:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE itineraries ADD COLUMN is_featured BOOLEAN NOT NULL DEFAULT FALSE"))
 
 
 _add_missing_columns()
@@ -453,6 +456,11 @@ def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(
     group.organizer_email = user.email
     profile = db.query(models.User).filter(models.User.email == user.email).first()
     group.organizer_name = (profile.name if profile and profile.name else None) or group.organizer_name or user.email.split("@")[0]
+    # A trip on a curated route unlocks that route for its host, so the route has to be real
+    if group.itinerary_id is not None:
+        if not db.query(models.Itinerary).filter(models.Itinerary.id == group.itinerary_id).first():
+            raise HTTPException(status_code=404, detail="Itinerary not found")
+
     # Verify the destination actually exists if an official destination_id was chosen
     if group.destination_id:
         dest = db.query(models.Destination).filter(models.Destination.id == group.destination_id).first()
@@ -1274,8 +1282,12 @@ def delete_notification(notification_id: int, db: Session = Depends(get_db), use
 # ITINERARIES ENDPOINTS
 # ==========================================
 
-# Itineraries are admin-only for now. To open them to every signed-in user, set this to False
-# along with ITINERARIES_ADMIN_ONLY in frontend/src/utils/features.ts
+# Admins star up to this many routes as free for everyone. Any other route opens for a user
+# once they host a trip on it: one trip, one route. Admins can open every route.
+MAX_FEATURED_ITINERARIES = 3
+
+# The redesigned site (with free and locked routes) is only shown to admins for now, so itineraries
+# stay admin-only. Set this to False when the redesign goes public for everyone.
 ITINERARIES_ADMIN_ONLY = True
 
 
@@ -1285,18 +1297,54 @@ def require_itinerary_viewer(user: CurrentUser = Depends(get_current_user)) -> C
     return user
 
 
+def _unlocked_itinerary_ids(db: Session, email: str) -> set:
+    """Routes this user has hosted a (not cancelled) trip on."""
+    rows = (
+        db.query(models.TravelGroup.itinerary_id)
+        .filter(
+            models.TravelGroup.organizer_email.ilike(email),
+            models.TravelGroup.itinerary_id.isnot(None),
+            models.TravelGroup.status != "cancelled",
+        )
+        .distinct()
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
+def _serialize_itinerary(itinerary: models.Itinerary, user: CurrentUser, unlocked_ids: set) -> schemas.ItineraryResponse:
+    """A locked route is sent as a teaser: no stops, only how many there are and their names for the trip form."""
+    stops = sorted(itinerary.stops or [], key=lambda s: (s.order_index or 0, s.id or 0))
+    is_locked = not user.is_admin and not itinerary.is_featured and itinerary.id not in unlocked_ids
+    response = schemas.ItineraryResponse.model_validate(itinerary)
+    return response.model_copy(update={
+        "is_locked": is_locked,
+        "stop_count": len(stops),
+        "stops": [] if is_locked else response.stops,
+        "route_preview": [s.destination.name for s in stops if s.destination] if is_locked else [],
+    })
+
+
 @app.get("/api/itineraries", response_model=List[schemas.ItineraryResponse])
-def get_all_itineraries(db: Session = Depends(get_db), _viewer: CurrentUser = Depends(require_itinerary_viewer)):
-    """Fetch all curated itineraries with their stops and destinations."""
-    return db.query(models.Itinerary).order_by(models.Itinerary.created_at.desc()).all()
+def get_all_itineraries(db: Session = Depends(get_db), user: CurrentUser = Depends(require_itinerary_viewer)):
+    """Fetch all curated itineraries, free picks first. Locked ones come without their stops."""
+    itineraries = (
+        db.query(models.Itinerary)
+        .order_by(models.Itinerary.is_featured.desc(), models.Itinerary.created_at.desc())
+        .all()
+    )
+    unlocked_ids = _unlocked_itinerary_ids(db, user.email)
+    return [_serialize_itinerary(it, user, unlocked_ids) for it in itineraries]
 
 
 @app.get("/api/itineraries/{itinerary_id}", response_model=schemas.ItineraryResponse)
-def get_itinerary_by_id(itinerary_id: int, db: Session = Depends(get_db), _viewer: CurrentUser = Depends(require_itinerary_viewer)):
-    """Fetch a single itinerary with all ordered stops."""
+def get_itinerary_by_id(itinerary_id: int, db: Session = Depends(get_db), user: CurrentUser = Depends(require_itinerary_viewer)):
+    """Fetch a single itinerary with all ordered stops, or its teaser if this user hasn't unlocked it."""
     itinerary = db.query(models.Itinerary).filter(models.Itinerary.id == itinerary_id).first()
     if not itinerary:
         raise HTTPException(status_code=404, detail="Itinerary not found")
+
+    unlocked_ids = _unlocked_itinerary_ids(db, user.email)
 
     # Auto-repair / re-sequence stops if there are gaps (e.g. from previously deleted stops)
     if itinerary.stops:
@@ -1310,7 +1358,7 @@ def get_itinerary_by_id(itinerary_id: int, db: Session = Depends(get_db), _viewe
             db.commit()
             db.refresh(itinerary)
 
-    return itinerary
+    return _serialize_itinerary(itinerary, user, unlocked_ids)
 
 
 @app.post("/api/itineraries", response_model=schemas.ItineraryResponse, status_code=status.HTTP_201_CREATED)
@@ -1346,7 +1394,7 @@ def create_itinerary(
 
     db.commit()
     db.refresh(new_itinerary)
-    return new_itinerary
+    return _serialize_itinerary(new_itinerary, admin, set())
 
 
 @app.put("/api/itineraries/{itinerary_id}", response_model=schemas.ItineraryResponse)
@@ -1371,10 +1419,19 @@ def update_itinerary(
         itinerary.estimated_duration = payload.estimated_duration.strip() if payload.estimated_duration else None
     if payload.estimated_budget is not None:
         itinerary.estimated_budget = payload.estimated_budget
+    if payload.is_featured is not None:
+        if payload.is_featured and not itinerary.is_featured:
+            featured_count = db.query(models.Itinerary).filter(models.Itinerary.is_featured.is_(True)).count()
+            if featured_count >= MAX_FEATURED_ITINERARIES:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Only {MAX_FEATURED_ITINERARIES} itineraries can be free at once. Un-feature one first.",
+                )
+        itinerary.is_featured = payload.is_featured
 
     db.commit()
     db.refresh(itinerary)
-    return itinerary
+    return _serialize_itinerary(itinerary, admin, set())
 
 
 @app.delete("/api/itineraries/{itinerary_id}", status_code=status.HTTP_200_OK)

@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AnimatePresence,
   motion,
-  useMotionTemplate,
   useMotionValueEvent,
   useReducedMotion,
   useScroll,
@@ -35,6 +34,9 @@ import type { Group, Place } from '../types';
 import { groupsApi, placesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { GroupCard } from '../components/groups/GroupCard';
+import { DateRail, dayKey, daysLabel, tripsByDay } from '../components/groups/DateRail';
+import { HeroCopy } from '../components/groups/HeroCopy';
+import { MyTripsStrip, activeMyTrips, type MyTrip } from '../components/groups/MyTripsStrip';
 import { StoryPromoAnnouncement } from '../components/groups/StoryPromo';
 import { PlacePicker } from '../components/groups/PlacePicker';
 import { TripDateTimePicker } from '../components/groups/TripDateTimePicker';
@@ -44,34 +46,20 @@ import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal } from '../components/motion/Reveal';
 import { Counter } from '../components/motion/Counter';
 import { Chip } from '../components/ui/Chip';
+import { TiltedGridHero, type TiltedGridImage } from '../components/ui/tilted-grid-hero';
 import { useIsStuck } from '../hooks/useIsStuck';
-import { photoProps, type PhotoKey } from '../utils/images';
-import { isPastTrip, seatsLeft, timeLeftLabel, TRIP_LISTED_HOURS } from '../utils/groups';
+import { optimizeImageUrl, photoProps, photoSrc, PHOTOS, type PhotoKey } from '../utils/images';
+import { isPastTrip, seatsLeft, timeLeftLabel, TRIP_LISTED_HOURS, withSamples } from '../utils/groups';
 import { setScrollLocked } from '../hooks/useLenis';
 import { cn } from '../utils/cn';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-type QuickFilter = 'all' | 'weekend' | 'seats';
-
-const QUICK_FILTERS: { key: QuickFilter; label: string }[] = [
-  { key: 'all', label: 'All trips' },
-  { key: 'weekend', label: 'This weekend' },
-  { key: 'seats', label: 'Seats open' },
+/* ── Hero row: our own Karnataka photos, wide and tall shots alternating ── */
+const HERO_PHOTOS: PhotoKey[] = [
+  'nandi', 'skandagiri', 'ghatsSummit', 'coorgFalls', 'hampi', 'omBeach',
+  'friends', 'mullayanagiri', 'chikmagalurHills', 'ghatsRoad', 'ubCityNight', 'commercialStreet',
 ];
-
-/** Saturday 00:00 → Sunday 23:59 of the coming weekend (or the current one, if it's already the weekend). */
-const thisWeekend = () => {
-  const now = new Date();
-  const day = now.getDay(); // 0 Sun … 6 Sat
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  if (day !== 0 && day !== 6) start.setDate(start.getDate() + (6 - day));
-  if (day === 0) start.setDate(start.getDate() - 1);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 2);
-  return [start.getTime(), end.getTime()] as const;
-};
 
 /* ── Start-a-trip form helpers ── */
 const TITLE_MAX = 80;
@@ -223,11 +211,26 @@ export const GroupsPage = () => {
   const reduced = useReducedMotion();
   const [searchParams, setSearchParams] = useSearchParams();
   const destinationIdParam = searchParams.get('destinationId');
+  // ?day=2026-11-06 (or two days for a weekend), so a picked day can be shared
+  const dayParam = searchParams.get('day');
+  const selectedDays = useMemo(() => (dayParam ? dayParam.split(',').filter(Boolean) : []), [dayParam]);
+  const setSelectedDays = (keys: string[]) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (keys.length) next.set('day', keys.join(','));
+        else next.delete('day');
+        return next;
+      },
+      { replace: true }
+    );
 
   const [groups, setGroups] = useState<(Group & { place?: Place })[]>([]);
   const [places, setPlaces] = useState<Place[]>([]);
+  // Trips the signed-in user hosts or was approved on, for the "Your trips" row
+  const [myTrips, setMyTrips] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [quick, setQuick] = useState<QuickFilter>('all');
+  const [seatsOnly, setSeatsOnly] = useState(false);
   const filterBarRef = useRef<HTMLDivElement>(null);
   const filterBarStuck = useIsStuck(filterBarRef, 108); // top-[6.75rem]
   const gridRef = useRef<HTMLElement>(null);
@@ -260,6 +263,7 @@ export const GroupsPage = () => {
     max_members: 6,
     chat_link: '',
     safety_notes: DEFAULT_SAFETY,
+    itinerary_id: undefined as number | undefined,
   });
 
   // Multi-stop custom curation state
@@ -279,6 +283,45 @@ export const GroupsPage = () => {
       return next;
     });
   };
+
+  useEffect(() => {
+    const itineraryIdParam = searchParams.get('itineraryId');
+    const customDestParam = searchParams.get('customDestination');
+    if (itineraryIdParam) {
+      // Hosting on a route (which unlocks it) is for SST students, same as hosting any trip
+      if (!isStudent) {
+        setIsHostLockedOpen(true);
+        return;
+      }
+      if (customDestParam) {
+        const stops = customDestParam.split(/\s*(?:➔|->|→)\s*/).filter(Boolean);
+        if (stops.length >= 2) {
+          setCustomStopCount(stops.length);
+          setCustomStops(stops);
+          setFormData((prev) => ({
+            ...prev,
+            destination_id: 'custom',
+            title: `Trip along ${stops.slice(0, 2).join(' & ')}`,
+            itinerary_id: Number(itineraryIdParam),
+          }));
+        } else {
+          setFormData((prev) => ({
+            ...prev,
+            title: `Trip: ${customDestParam}`,
+            itinerary_id: Number(itineraryIdParam),
+          }));
+        }
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          itinerary_id: Number(itineraryIdParam),
+        }));
+      }
+      setSizePicked(true);
+      setOpenedAt(Date.now());
+      setIsModalOpen(true);
+    }
+  }, [searchParams, isStudent]);
 
   const handleStopChange = (index: number, val: string) => {
     setCustomStops((prev) => {
@@ -303,7 +346,8 @@ export const GroupsPage = () => {
         };
       });
 
-      setGroups(groupsWithPlaces);
+      // While the site is new, sample trips to real places top the list up; tapping one explains it's a sample
+      setGroups(withSamples(groupsWithPlaces, allPlaces).map((g) => ('place' in g ? g : { ...g, place: placesMap.get(g.destination_id as number) })));
     } catch (error) {
       console.error('Failed to fetch groups or places', error);
     } finally {
@@ -314,6 +358,23 @@ export const GroupsPage = () => {
   useEffect(() => {
     fetchGroupsAndPlaces();
   }, []);
+
+  useEffect(() => {
+    if (!user?.email) {
+      setMyTrips([]);
+      return;
+    }
+    let cancelled = false;
+    groupsApi.getMyTrips().then((trips) => !cancelled && setMyTrips(trips));
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.email]);
+
+  const myTripsShown = useMemo<MyTrip[]>(() => {
+    const byId = new Map(places.map((p) => [p.id, p]));
+    return activeMyTrips(myTrips.map((t) => ({ ...t, place: byId.get(Number(t.destination_id || (t as any).place_id)) })));
+  }, [myTrips, places]);
 
   useEffect(() => {
     setScrollLocked(isModalOpen);
@@ -439,6 +500,7 @@ export const GroupsPage = () => {
       const created = await groupsApi.createGroup({
         destination_id: finalDestId,
         custom_destination: finalCustomDest,
+        itinerary_id: formData.itinerary_id,
         title: formData.title.trim(),
         description: formData.description.trim(),
         trip_date: new Date(formData.trip_date).toISOString(),
@@ -450,6 +512,11 @@ export const GroupsPage = () => {
 
       if (created) {
         setIsModalOpen(false);
+        // A trip on a curated route unlocks it, so take the host straight to the opened route
+        if (formData.itinerary_id) {
+          navigate(`/itineraries/${formData.itinerary_id}`);
+          return;
+        }
         setFormData({
           destination_id: '',
           title: '',
@@ -459,6 +526,7 @@ export const GroupsPage = () => {
           max_members: 6,
           chat_link: '',
           safety_notes: DEFAULT_SAFETY,
+    itinerary_id: undefined as number | undefined,
         });
         setCustomStopCount(2);
         setCustomStops(['', '']);
@@ -479,31 +547,37 @@ export const GroupsPage = () => {
 
   const targetPlace = destinationIdParam ? places.find((p) => p.id === Number(destinationIdParam)) : null;
 
-  const filteredGroups = useMemo(() => {
-    const [wkStart, wkEnd] = thisWeekend();
-    return groups
-      .filter((group) => {
-        if (!destinationIdParam) return true;
-        const matchesOfficial = group.destination_id === Number(destinationIdParam);
-        const matchesCustom = targetPlace && group.custom_destination ? group.custom_destination.toLowerCase().includes(targetPlace.name.toLowerCase()) : false;
-        return matchesOfficial || matchesCustom;
-      })
-      .filter((g) => {
-        const t = new Date(g.trip_date).getTime();
-        if (quick === 'weekend') return t >= wkStart && t < wkEnd;
-        if (quick === 'seats') return g.status !== 'full' && seatsLeft(g) > 0 && !isPastTrip(g);
-        return true;
-      })
-      // Upcoming trips first (soonest at the top), past trips last
-      .sort((a, b) => {
-        const pa = isPastTrip(a);
-        const pb = isPastTrip(b);
-        if (pa !== pb) return pa ? 1 : -1;
-        const ta = new Date(a.trip_date).getTime();
-        const tb = new Date(b.trip_date).getTime();
-        return pa ? tb - ta : ta - tb;
-      });
-  }, [groups, destinationIdParam, targetPlace, quick]);
+  // Destination and seats filters; the date rail's dots count from this list
+  const matchingGroups = useMemo(
+    () =>
+      groups
+        .filter((group) => {
+          if (!destinationIdParam) return true;
+          const matchesOfficial = group.destination_id === Number(destinationIdParam);
+          const matchesCustom = targetPlace && group.custom_destination ? group.custom_destination.toLowerCase().includes(targetPlace.name.toLowerCase()) : false;
+          return matchesOfficial || matchesCustom;
+        })
+        .filter((g) => !seatsOnly || (g.status !== 'full' && seatsLeft(g) > 0 && !isPastTrip(g))),
+    [groups, destinationIdParam, targetPlace, seatsOnly]
+  );
+  const railTrips = useMemo(() => tripsByDay(matchingGroups.filter((g) => !isPastTrip(g))), [matchingGroups]);
+
+  const filteredGroups = useMemo(
+    () =>
+      matchingGroups
+        .filter((g) => !selectedDays.length || selectedDays.includes(dayKey(new Date(g.trip_date))))
+        // Upcoming trips first (soonest at the top), past trips last
+        .sort((a, b) => {
+          const pa = isPastTrip(a);
+          const pb = isPastTrip(b);
+          if (pa !== pb) return pa ? 1 : -1;
+          const ta = new Date(a.trip_date).getTime();
+          const tb = new Date(b.trip_date).getTime();
+          return pa ? tb - ta : ta - tb;
+        }),
+    [matchingGroups, selectedDays]
+  );
+  const dayLabel = daysLabel(selectedDays);
 
   // Departed trips stay listed for 24 hours, in their own "just wrapped" section below the joinable ones
   const upcomingTrips = filteredGroups.filter((g) => !isPastTrip(g));
@@ -513,105 +587,85 @@ export const GroupsPage = () => {
   const openSeats = upcoming.filter((g) => g.status !== 'full').reduce((sum, g) => sum + seatsLeft(g), 0);
   const destinations = new Set(upcoming.map((g) => g.custom_destination || g.place?.name).filter(Boolean)).size;
 
-  /* ── Hero: photo shrinks into a frame as you scroll (same motion language as Explore) ── */
-  const heroRef = useRef<HTMLElement>(null);
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
-  const inset = useTransform(scrollYProgress, [0, 1], [0, 1]);
-  const clipPath = useMotionTemplate`inset(calc(${inset} * 6%) calc(${inset} * 4%) calc(${inset} * 6%) calc(${inset} * 4%) round calc(${inset} * 40px))`;
-  const imageY = useTransform(scrollYProgress, [0, 1], ['0%', '18%']);
-  const textY = useTransform(scrollYProgress, [0, 1], ['0%', '-40%']);
-  const textOpacity = useTransform(scrollYProgress, [0, 0.55], [1, 0]);
+  // Local photos first so the row is full on the first paint; trips' own places are appended after them,
+  // so tiles already on screen keep their image and the new ones come in as tiles wrap out of sight
+  const heroImages = useMemo<TiltedGridImage[]>(() => {
+    const local = HERO_PHOTOS.map((key) => ({ src: photoSrc(key, 800), alt: PHOTOS[key].alt }));
+    const seen = new Set<string>();
+    const trips = groups.filter((g) => !isPastTrip(g)).flatMap((g) => {
+      const src = optimizeImageUrl(g.place?.image_url, 800);
+      if (!src || seen.has(src)) return [];
+      seen.add(src);
+      return [{ src, alt: g.place?.name ?? g.title }];
+    });
+    return [...local, ...trips];
+  }, [groups]);
 
   const scrollToGrid = () => gridRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 
   return (
     <div className="flex flex-col w-full bg-sand min-h-screen">
-      {/* ── Hero ── */}
-      <section ref={heroRef} className="relative h-[92svh] min-h-[620px] max-h-[920px] bg-sand">
-        <motion.div className="absolute inset-0 overflow-hidden bg-night grain" style={reduced ? undefined : { clipPath }}>
-          <motion.img
-            {...photoProps('ghatsSummit')}
-            fetchPriority="high"
-            style={reduced ? { scale: 1.05 } : { y: imageY, scale: 1.12 }}
-            className="absolute inset-0 w-full h-full object-cover object-[center_40%]"
-          />
-          <div className="absolute inset-0 hero-scrim" />
-        </motion.div>
+      {/* ── Hero: words on top, the places people are heading to curving past in their own band, actions below.
+           One orange moment (the accent words); sage only where it means open seats. ── */}
+      <section className="relative bg-sand overflow-hidden pt-24 sm:pt-28 pb-8">
+        <div aria-hidden className="absolute inset-x-0 top-[34%] h-[46%] bg-[radial-gradient(55%_60%_at_50%_50%,var(--color-paper),transparent_72%)]" />
 
-        <motion.div
-          style={reduced ? undefined : { y: textY, opacity: textOpacity }}
-          className="on-photo relative z-10 h-full max-w-7xl mx-auto px-page flex flex-col justify-end pb-16 sm:pb-20"
-        >
-          <p className="section-label mb-6 animate-fade-up">Travel groups · Bengaluru</p>
-          <SplitHeading
-            as="h1"
-            onMount
-            delay={0.1}
-            className="text-display text-sand max-w-4xl"
-            style={{ fontSize: 'clamp(3rem, 8vw, 7rem)' }}
-            accentClassName="italic font-medium text-[#F4B08A]"
-            parts={[{ text: 'Travel' }, { text: 'together.', accent: true }]}
-          />
-          <p className="text-[#E4E8E5] text-lg sm:text-xl max-w-xl mt-6 leading-relaxed animate-fade-up delay-400">
-            Pool rides, split fuel, and find people who want to see the same sunrise. Hosts approve every member.
-          </p>
+        <div className="relative max-w-3xl mx-auto px-page text-center">
+          <HeroCopy count={upcoming.length} loading={isLoading} onHost={handleOpenModal} onBrowse={scrollToGrid} />
+        </div>
 
-          <div className="flex flex-wrap gap-3 mt-9 animate-fade-up delay-500">
-            <button onClick={handleOpenModal} className="btn-primary">
-              <Plus className="w-4 h-4" /> Start a trip
+        <TiltedGridHero
+          images={heroImages}
+          speed={4.5}
+          tileHeight={58}
+          axis={50}
+          curve={62}
+          fade={9}
+          className="relative mt-5 h-[clamp(170px,26svh,280px)] w-full"
+        />
+
+        <div className="relative max-w-3xl mx-auto px-page mt-5 flex flex-col items-center">
+          <div className="flex flex-wrap justify-center gap-3 animate-fade-up delay-500">
+            <button onClick={handleOpenModal} className="btn-primary hero-cta">
+              <span className="hero-cta-icon" aria-hidden>
+                <Plus className="w-4 h-4" strokeWidth={2.5} />
+              </span>
+              <span className="flex flex-col items-start leading-tight">
+                <span>Start a trip</span>
+                <span className="text-[11px] font-medium text-sand/60">Takes 2 minutes</span>
+              </span>
             </button>
-            <button onClick={scrollToGrid} className="btn-ghost">
-              Browse trips <ArrowDown className="w-4 h-4" />
+            <button onClick={scrollToGrid} className="btn-ghost hero-browse">
+              Browse trips
+              {!isLoading && upcoming.length > 0 && (
+                <span className="rounded-full bg-sage-soft text-sage-text text-[11px] font-bold px-2 py-0.5 tabular-nums">{upcoming.length}</span>
+              )}
+              <span className="hero-browse-icon" aria-hidden>
+                <span><ArrowDown className="w-4 h-4" /></span>
+                <span><ArrowDown className="w-4 h-4" /></span>
+              </span>
             </button>
           </div>
-
-          <dl className="flex gap-8 sm:gap-12 text-sand mt-12 animate-fade-up delay-600">
-            {[
-              { n: upcoming.length, l: 'Upcoming trips' },
-              { n: openSeats, l: 'Seats open' },
-              { n: destinations, l: 'Destinations' },
-            ].map((s) => (
-              <div key={s.l}>
-                <dd className="font-display text-3xl sm:text-4xl leading-none">{isLoading ? '—' : <Counter value={s.n} />}</dd>
-                <dt className="text-label text-sand/65 mt-2">{s.l}</dt>
-              </div>
-            ))}
-          </dl>
-        </motion.div>
+        </div>
       </section>
 
-      {/* ── Trust strip ── */}
-      <div className="max-w-7xl mx-auto w-full px-4 sm:px-page -mt-2 relative z-10">
-        <Reveal className="card card-shadow flex items-start sm:items-center gap-4 p-5 sm:px-7">
-          <span className="w-11 h-11 rounded-2xl bg-sage-soft text-sage-text flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-5 h-5" />
-          </span>
-          <p className="text-sm text-body leading-relaxed">
-            <strong className="text-ink">Private by default.</strong> A trip's WhatsApp or Telegram link stays hidden until the host reviews and approves your request.
-          </p>
-        </Reveal>
-      </div>
-
-      {/* ── New: Trip Story Maker (pops up once on the first visit, then stays as a banner) ── */}
-      <StoryPromoAnnouncement
-        onHost={handleOpenModal}
-        onBrowse={() => gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-      />
+      {/* ── Your trips: hosting and joined, soonest first ── */}
+      <MyTripsStrip trips={myTripsShown} />
 
       {/* ── Filters (sticky only while the trips are on screen) + trips ── */}
       <div>
-      <div ref={filterBarRef} className="sticky z-30 top-[6.75rem] mt-8">
+      <div ref={filterBarRef} className="sticky z-30 top-[6.75rem] mt-2">
         <div className="sticky-shelf" data-on={filterBarStuck} aria-hidden />
         <div className="max-w-7xl mx-auto px-3 sm:px-page">
-          <div className="glass rounded-full card-shadow flex items-center gap-2 p-2">
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-1 min-w-0" data-lenis-prevent-horizontal>
-              {QUICK_FILTERS.map((f) => (
-                <Chip key={f.key} group="groups" active={quick === f.key} onClick={() => setQuick(f.key)}>
-                  {f.label}
-                </Chip>
-              ))}
+          <div className="glass rounded-[26px] card-shadow flex items-center gap-2 p-1.5">
+            <DateRail trips={railTrips} value={selectedDays} onChange={setSelectedDays} />
+            <span className="w-px self-stretch my-2 bg-line shrink-0 max-sm:hidden" aria-hidden />
+            <div className="shrink-0 max-sm:hidden">
+              <Chip group="groups-seats" active={seatsOnly} onClick={() => setSeatsOnly((v) => !v)}>
+                <span className="w-1.5 h-1.5 rounded-full bg-seat" aria-hidden /> Seats open
+              </Chip>
             </div>
-            <button onClick={handleOpenModal} className="btn-primary !py-2.5 !px-4 !text-[13px] shrink-0 max-sm:!hidden">
+            <button onClick={handleOpenModal} className="btn-primary !py-2.5 !px-4 !text-[13px] shrink-0 max-lg:!hidden">
               <Plus className="w-4 h-4" /> Start a trip
             </button>
           </div>
@@ -619,10 +673,10 @@ export const GroupsPage = () => {
       </div>
 
       {/* ── Trips ── */}
-      <section ref={gridRef} className="max-w-7xl mx-auto w-full px-page pt-16 pb-28 scroll-mt-40">
-        <Reveal className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+      <section ref={gridRef} className="max-w-7xl mx-auto w-full px-page pt-10 pb-16 scroll-mt-40">
+        <Reveal className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 mb-8">
           <div>
-            <p className="section-label mb-4">{targetPlace ? 'Trips to' : 'Coming up'}</p>
+            <p className="section-label mb-4">{targetPlace ? 'Trips to' : dayLabel ? 'Leaving' : 'Coming up'}</p>
             <h2 className="text-display text-ink" style={{ fontSize: 'clamp(2rem, 4vw, 3.25rem)' }}>
               {targetPlace ? (
                 <>
@@ -630,6 +684,10 @@ export const GroupsPage = () => {
                 </>
               ) : isLoading ? (
                 'Loading trips…'
+              ) : dayLabel ? (
+                <>
+                  {upcomingTrips.length} {upcomingTrips.length === 1 ? 'trip' : 'trips'} on <span className="accent-word">{dayLabel}.</span>
+                </>
               ) : (
                 <>
                   {upcomingTrips.length} {upcomingTrips.length === 1 ? 'trip' : 'trips'} <span className="accent-word">to join.</span>
@@ -637,8 +695,32 @@ export const GroupsPage = () => {
               )}
             </h2>
           </div>
+          {!isLoading && !destinationIdParam && (
+            <p className="flex items-center gap-2 text-sm text-muted md:pb-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-seat" aria-hidden />
+              <span>
+                <strong className="font-semibold text-ink"><Counter value={openSeats} /></strong> seats open
+              </span>
+              <span aria-hidden>·</span>
+              <span>
+                <strong className="font-semibold text-ink"><Counter value={destinations} /></strong> {destinations === 1 ? 'destination' : 'destinations'}
+              </span>
+            </p>
+          )}
           {destinationIdParam && (
-            <button onClick={() => setSearchParams({})} className="btn-ghost self-start md:self-auto">
+            <button
+              onClick={() =>
+                setSearchParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.delete('destinationId');
+                    return next;
+                  },
+                  { replace: true }
+                )
+              }
+              className="btn-ghost self-start md:self-auto"
+            >
               <X className="w-4 h-4" /> Show all destinations
             </button>
           )}
@@ -668,19 +750,25 @@ export const GroupsPage = () => {
             <div className="flex flex-col justify-center p-8 sm:p-12">
               <p className="section-label mb-4">Nothing yet</p>
               <h3 className="font-display text-3xl text-ink mb-3">
-                {targetPlace ? `No trips to ${targetPlace.name} yet` : quick !== 'all' ? 'No trips match this filter' : 'No trips planned yet'}
+                {targetPlace
+                  ? `No trips to ${targetPlace.name} yet`
+                  : dayLabel
+                    ? `Nothing leaves on ${dayLabel} yet`
+                    : seatsOnly
+                      ? 'Every trip is full right now'
+                      : 'No trips planned yet'}
               </h3>
               <p className="text-muted mb-8 max-w-sm">
-                {targetPlace ? 'Be the one who gets the group together. It takes two minutes.' : 'Pick a place, set a date and gather your crew. It takes two minutes.'}
+                {targetPlace || dayLabel ? 'Be the one who gets the group together. It takes two minutes.' : 'Pick a place, set a date and gather your crew. It takes two minutes.'}
               </p>
               <div className="flex flex-wrap gap-3">
                 <button onClick={handleOpenModal} className="btn-primary">
                   <Plus className="w-4 h-4" /> {targetPlace ? `Plan a trip to ${targetPlace.name}` : 'Start a trip'}
                 </button>
-                {(destinationIdParam || quick !== 'all') && (
+                {(destinationIdParam || selectedDays.length > 0 || seatsOnly) && (
                   <button
                     onClick={() => {
-                      setQuick('all');
+                      setSeatsOnly(false);
                       setSearchParams({});
                     }}
                     className="btn-ghost"
@@ -743,6 +831,24 @@ export const GroupsPage = () => {
       </section>
       </div>
 
+      {/* ── Trust strip ── */}
+      <div className="max-w-7xl mx-auto w-full px-4 sm:px-page relative z-10">
+        <Reveal className="card card-shadow flex items-start sm:items-center gap-4 p-5 sm:px-7">
+          <span className="w-11 h-11 rounded-2xl bg-sage-soft text-sage-text flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-5 h-5" />
+          </span>
+          <p className="text-sm text-body leading-relaxed">
+            <strong className="text-ink">Private by default.</strong> A trip's WhatsApp or Telegram link stays hidden until the host reviews and approves your request.
+          </p>
+        </Reveal>
+      </div>
+
+      {/* ── New: Trip Story Maker (pops up once on the first visit, then stays as a banner) ── */}
+      <StoryPromoAnnouncement
+        onHost={handleOpenModal}
+        onBrowse={() => gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+      />
+
       {/* ── How it works (pinned story) ── */}
       <HowItWorks />
 
@@ -791,7 +897,7 @@ export const GroupsPage = () => {
               className="relative w-full max-w-xl h-full bg-sand overflow-y-auto shadow-2xl"
               data-lenis-prevent
             >
-              <div className="sticky top-0 z-30 bg-sand/90 backdrop-blur border-b border-line">
+              <div className="sticky top-0 z-30 bg-sand/90 border-b border-line">
                 <div className="px-6 sm:px-8 pt-5 pb-4 flex items-start justify-between gap-4">
                   <div>
                     <p className="section-label">New trip</p>
@@ -1231,7 +1337,7 @@ export const GroupsPage = () => {
                   )}
                 </AnimatePresence>
 
-                <div className="sticky bottom-0 z-20 -mx-6 sm:-mx-8 px-6 sm:px-8 py-4 bg-sand/95 backdrop-blur border-t border-line flex items-center gap-3">
+                <div className="sticky bottom-0 z-20 -mx-6 sm:-mx-8 px-6 sm:px-8 py-4 bg-sand/95 border-t border-line flex items-center gap-3">
                   <p className="text-xs text-muted mr-auto min-w-0 hidden sm:block">
                     {requiredDone < requiredChecks.length ? (
                       <>

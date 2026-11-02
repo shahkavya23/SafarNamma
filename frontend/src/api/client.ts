@@ -12,6 +12,8 @@ export const TOKEN_KEY = 'roamlocal_token';
 export const AUTH_EXPIRED_EVENT = 'auth:expired';
 
 // Every request carries the session token; the backend decides who the caller is from it
+const prefetched = new Map<string, { at: number; promise: Promise<Group | undefined> }>();
+
 const apiFetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
   let token: string | null = null;
   try {
@@ -204,7 +206,18 @@ export const groupsApi = {
   },
 
   // 2. Fetch single group (passes logged-in user email to check if chat_link should be revealed)
-  getGroupById: async (id: string | number, userEmail?: string): Promise<Group | undefined> => {
+  /** Starts loading a trip early (on card hover) so opening it can reuse the answer. */
+  prefetchGroup: (id: string | number) => {
+    const key = String(id);
+    if (prefetched.get(key) && Date.now() - prefetched.get(key)!.at < 15_000) return;
+    prefetched.set(key, { at: Date.now(), promise: groupsApi.getGroupById(id, undefined, true) });
+  },
+
+  getGroupById: async (id: string | number, userEmail?: string, fresh = false): Promise<Group | undefined> => {
+    // Take the answer a hover already started, once; anything older than a few seconds is refetched
+    const early = prefetched.get(String(id));
+    prefetched.delete(String(id));
+    if (!fresh && early && Date.now() - early.at < 15_000) return early.promise;
     try {
       const url = userEmail
         ? `${BASE_URL}api/groups/${id}?user_email=${encodeURIComponent(userEmail)}`
@@ -657,15 +670,32 @@ export const presenceApi = {
 };
 
 
+// Carries the HTTP status, so a server that's still waking can be told apart from a final "no"
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 export const itinerariesApi = {
-  getAll: async (): Promise<Itinerary[]> => {
+  // Throws on failure, so "couldn't load" is never mistaken for "there are no routes"
+  getAll: async (signal?: AbortSignal): Promise<Itinerary[]> => {
+    // Long enough for a sleeping Render instance to wake
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
+    const stop = () => controller.abort();
+    signal?.addEventListener('abort', stop, { once: true });
     try {
-      const response = await apiFetch(`${BASE_URL}api/itineraries`);
-      if (!response.ok) return [];
+      const response = await apiFetch(`${BASE_URL}api/itineraries`, { signal: controller.signal });
+      if (!response.ok) throw new ApiError(`Failed to fetch itineraries (${response.status})`, response.status);
       return await response.json();
-    } catch (err) {
-      console.error('Failed to fetch itineraries:', err);
-      return [];
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', stop);
     }
   },
 
@@ -693,7 +723,7 @@ export const itinerariesApi = {
     return await response.json();
   },
 
-  update: async (id: number | string, data: Partial<CreateItineraryData>): Promise<Itinerary> => {
+  update: async (id: number | string, data: Partial<CreateItineraryData> & { is_featured?: boolean }): Promise<Itinerary> => {
     const response = await apiFetch(`${BASE_URL}api/itineraries/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

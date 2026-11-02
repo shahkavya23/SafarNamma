@@ -4,13 +4,16 @@ import type { Itinerary } from '../../types';
 import { fallbackPhoto, optimizeImageUrl } from '../../utils/images';
 
 /* ─── Itineraries hero copy ───
-   Few words, big: the heading rises in straight away, then the road, the counts and the
-   route chips all arrive together the moment the routes have loaded, in time with the
-   photos flying out behind them. Tapping a chip jumps to that route in the deck. */
+   Few words, big: the heading, the road and the tagline need nothing from the server, so
+   they arrive straight away. The counts and route chips join them the moment the routes
+   have loaded, into space kept for them so the heading doesn't jump. Tapping a chip jumps
+   to that route in the deck. */
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const SYNC_SECONDS = 1.4;
-const MAX_CHIPS = 4;
+// The road starts drawing as the heading settles
+const ROAD_DELAY = 0.35;
+const MAX_CHIPS = 5;
 const ROAD_PATH = 'M2 10 C 60 2, 110 16, 160 8 S 260 4, 298 10';
 
 interface ItinerariesHeroCopyProps {
@@ -18,8 +21,12 @@ interface ItinerariesHeroCopyProps {
   ready: boolean;
   activeId?: number;
   onSelect: (id: number) => void;
+  /** The "+N more" chip: jump to the deck, where every route is listed */
+  onSeeAll?: () => void;
   /** Admin button, shown with the chips */
   action?: ReactNode;
+  /** A line under the tagline, e.g. how locked routes open up */
+  note?: string;
 }
 
 const CountUp = ({ value, ready, reduced }: { value: number; ready: boolean; reduced: boolean }) => {
@@ -39,10 +46,11 @@ const CountUp = ({ value, ready, reduced }: { value: number; ready: boolean; red
   return <motion.span>{shown}</motion.span>;
 };
 
-export const ItinerariesHeroCopy = ({ itineraries, ready, activeId, onSelect, action }: ItinerariesHeroCopyProps) => {
+export const ItinerariesHeroCopy = ({ itineraries, ready, activeId, onSelect, onSeeAll, action, note }: ItinerariesHeroCopyProps) => {
   const reduced = !!useReducedMotion();
   const routes = itineraries.length;
-  const stops = itineraries.reduce((sum, it) => sum + (it.stops?.length || 0), 0);
+  // Locked routes come without their stops, so count from the server's number
+  const stops = itineraries.reduce((sum, it) => sum + (it.stop_count ?? it.stops?.length ?? 0), 0);
 
   const word: Variants = {
     hidden: reduced ? { opacity: 0 } : { y: '110%' },
@@ -78,13 +86,20 @@ export const ItinerariesHeroCopy = ({ itineraries, ready, activeId, onSelect, ac
               strokeWidth="3"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
-              initial={{ pathLength: reduced ? 1 : 0 }}
-              animate={{ pathLength: ready ? 1 : reduced ? 1 : 0 }}
-              transition={{ duration: reduced ? 0 : SYNC_SECONDS, ease: EASE }}
+              // Hidden until it draws: a zero-length line with round caps paints as two dots
+              initial={reduced ? false : { pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: 1 }}
+              transition={{
+                duration: reduced ? 0 : SYNC_SECONDS,
+                delay: reduced ? 0 : ROAD_DELAY,
+                ease: EASE,
+                opacity: { duration: 0, delay: reduced ? 0 : ROAD_DELAY },
+              }}
             />
-            {ready && !reduced && (
-              <circle r="4" fill="var(--color-diya)" stroke="var(--color-accent)" strokeWidth="1">
-                <animateMotion dur="4s" begin="1.4s" repeatCount="indefinite" path={ROAD_PATH} />
+            {!reduced && (
+              <circle r="4" fill="var(--color-diya)" stroke="var(--color-accent)" strokeWidth="1" opacity="0">
+                <set attributeName="opacity" to="1" begin={`${ROAD_DELAY + SYNC_SECONDS}s`} />
+                <animateMotion dur="4s" begin={`${ROAD_DELAY + SYNC_SECONDS}s`} repeatCount="indefinite" path={ROAD_PATH} />
               </circle>
             )}
           </svg>
@@ -92,23 +107,35 @@ export const ItinerariesHeroCopy = ({ itineraries, ready, activeId, onSelect, ac
       </h1>
 
       <motion.div
-        initial={false}
-        animate={ready ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
-        transition={{ duration: reduced ? 0 : 0.7, ease: EASE }}
+        initial={reduced ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: reduced ? 0 : 0.7, delay: reduced ? 0 : ROAD_DELAY, ease: EASE }}
         className="mt-[clamp(0.75rem,3dvh,1.75rem)] flex flex-col items-center gap-[clamp(0.5rem,2dvh,1rem)]"
       >
-        {routes > 0 && (
-          <p className="font-mono text-xs sm:text-sm font-bold uppercase tracking-[0.2em] text-accent-text">
-            <CountUp value={routes} ready={ready} reduced={reduced} /> {routes === 1 ? 'route' : 'routes'}
-            <span className="mx-2 text-faint">·</span>
-            <CountUp value={stops} ready={ready} reduced={reduced} /> {stops === 1 ? 'stop' : 'stops'}
-          </p>
+        {(routes > 0 || !ready) && (
+          <motion.p
+            initial={false}
+            animate={{ opacity: ready ? 1 : 0 }}
+            transition={{ duration: reduced ? 0 : 0.7, ease: EASE }}
+            className="min-h-4 sm:min-h-5 font-mono text-xs sm:text-sm font-bold uppercase tracking-[0.2em] text-accent-text"
+          >
+            {routes > 0 && (
+              <>
+                <CountUp value={routes} ready={ready} reduced={reduced} /> {routes === 1 ? 'route' : 'routes'}
+                <span className="mx-2 text-faint">·</span>
+                <CountUp value={stops} ready={ready} reduced={reduced} /> {stops === 1 ? 'stop' : 'stops'}
+              </>
+            )}
+          </motion.p>
         )}
         <p className="text-lg sm:text-2xl font-medium text-ink [@media(max-height:480px)]:hidden">
           Pick a route. Bring your crew.
         </p>
+        {note && (
+          <p className="max-w-xl text-sm sm:text-base text-muted leading-snug [@media(max-height:560px)]:hidden">{note}</p>
+        )}
 
-        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
+        <div className={`flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 ${ready ? '' : 'min-h-11'}`}>
           {itineraries.slice(0, MAX_CHIPS).map((it, i) => {
             const isActive = it.id === activeId;
             return (
@@ -136,7 +163,16 @@ export const ItinerariesHeroCopy = ({ itineraries, ready, activeId, onSelect, ac
               </motion.button>
             );
           })}
-          {action}
+          {ready && onSeeAll && routes > MAX_CHIPS && (
+            <button
+              type="button"
+              onClick={onSeeAll}
+              className="inline-flex items-center h-11 px-4 rounded-full bg-paper border border-line text-sm font-semibold text-accent-text shadow-[0_10px_24px_-12px_rgba(14,31,34,0.5)] transition-colors hover:border-accent"
+            >
+              +{routes - MAX_CHIPS} more
+            </button>
+          )}
+          {ready && action}
         </div>
       </motion.div>
     </div>

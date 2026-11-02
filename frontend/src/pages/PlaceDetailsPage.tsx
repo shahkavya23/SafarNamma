@@ -1,19 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   MapPin,
-  CheckCircle,
   Navigation,
   Bookmark,
   ExternalLink,
-  AlertTriangle,
   Star,
-  MessageSquare,
   Sparkles,
   ArrowRight,
   Pencil,
   Trash2,
-  Leaf,
   IndianRupee,
   CalendarDays,
   Hourglass,
@@ -21,7 +17,7 @@ import {
   Users,
   Share2,
   UtensilsCrossed,
-  Compass,
+  PenLine,
 } from 'lucide-react';
 import type { Place, Review } from '../types';
 import { placesApi, reviewApi } from '../api/client';
@@ -31,52 +27,28 @@ import { PhotoStrip, PhotoLightbox } from '../components/places/PlaceGallery';
 import { MenuFlipbook } from '../components/places/MenuFlipbook';
 import { BoardingPass } from '../components/places/BoardingPass';
 import { PlaceCard } from '../components/places/PlaceCard';
-import { DetailHero, FactsCard } from '../components/detail/DetailHero';
+import { DetailHero, FactsCard, type Fact } from '../components/detail/DetailHero';
 import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal, RevealItem } from '../components/motion/Reveal';
 import { fallbackPhoto } from '../utils/images';
 import { formatBudget, shortLocation, formatSubmitterName } from '../utils/format';
 import { categoryIcon } from '../utils/categories';
-import { isHoursInDescription, isOpen247 } from '../utils/hours';
-
-const formatTime = (timeStr?: string) => {
-  if (!timeStr) return '';
-  if (!timeStr.includes(':')) return timeStr;
-  const [h, m] = timeStr.split(':').map(Number);
-  if (isNaN(h) || isNaN(m)) return timeStr;
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h % 12 || 12;
-  return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
-};
-
-const formatVisitingHours = (open?: string, close?: string) => {
-  if (!open && !close) return 'Hours not listed';
-  if (isOpen247(open, close)) return 'Open 24/7';
-  if (isHoursInDescription(open, close)) return 'Check description';
-  if (open && close) {
-    return `${formatTime(open)} – ${formatTime(close)}`;
-  }
-  if (open) {
-    if (open.toLowerCase().includes('to') || open.includes('-') || open.toLowerCase().includes('24')) {
-      return open;
-    }
-    return `Opens at ${formatTime(open)}`;
-  }
-  return `Closes at ${formatTime(close)}`;
-};
-
-const StarRow: React.FC<{ rating: number; size?: string }> = ({ rating, size = 'w-4 h-4' }) => (
-  <div className="flex items-center gap-0.5" aria-label={`${rating.toFixed(1)} out of 5`}>
-    {[1, 2, 3, 4, 5].map((star) => (
-      <Star key={star} className={`${size} ${star <= Math.round(rating) ? 'text-gold fill-gold' : 'text-stone-deep fill-stone-deep'}`} />
-    ))}
-  </div>
-);
+import { formatVisitingHours, isHoursInDescription, isOpen247 } from '../utils/hours';
+import { describePlace } from '../utils/describePlace';
+import { budgetLevel, durationNote, hoursStatus, seasonStatus } from '../utils/visitInfo';
+import { PlaceStory } from '../components/places/PlaceStory';
+import { PlaceReviews } from '../components/places/PlaceReviews';
 
 export const PlaceDetailsPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const [place, setPlace] = useState<Place | null>(null);
+  // Re-render every minute so "Open now · closes in 3h" stays true
+  const [, setMinute] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setMinute((n) => n + 1), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -87,14 +59,6 @@ export const PlaceDetailsPage = () => {
   // Layer 4A: Reviews & Ratings state
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
-
-  // Layer 4B: Review Submission state
-  const [newRating, setNewRating] = useState<number>(5);
-  const [hoverRating, setHoverRating] = useState<number>(0);
-  const [newComment, setNewComment] = useState<string>('');
-  const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
-  const [reviewSuccess, setReviewSuccess] = useState<string | null>(null);
 
   // Use our new global favorites context
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
@@ -126,45 +90,14 @@ export const PlaceDetailsPage = () => {
     }
   };
 
-  const handleReviewSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Posts a review, shows it at the top, then refreshes the place so the header rating updates. Throws on failure.
+  const postReview = async (rating: number, comment: string) => {
     if (!place) return;
-    if (!newComment.trim()) {
-      setReviewError('Please write a few words about your experience.');
-      return;
-    }
-
-    setIsSubmittingReview(true);
-    setReviewError(null);
-    setReviewSuccess(null);
-
-    try {
-      const createdReview = await reviewApi.createReview({
-        destination_id: place.id,
-        rating: newRating,
-        comment: newComment.trim(),
-      });
-
-      // 1. Instantly show new review at top of list
-      setReviews((prev) => [createdReview, ...prev]);
-
-      // 2. Reset form inputs
-      setNewComment('');
-      setNewRating(5);
-      setReviewSuccess('Your review has been posted. Thank you!');
-
-      // 3. Refresh destination rating from backend so header star updates
-      if (slug) {
-        const refreshedPlace = await placesApi.getPlaceById(slug);
-        if (refreshedPlace) {
-          setPlace(refreshedPlace);
-        }
-      }
-    } catch (err: any) {
-      console.error('Failed to post review:', err);
-      setReviewError(err.message || 'Failed to submit your review. Please try again.');
-    } finally {
-      setIsSubmittingReview(false);
+    const createdReview = await reviewApi.createReview({ destination_id: place.id, rating, comment });
+    setReviews((prev) => [createdReview, ...prev]);
+    if (slug) {
+      const refreshedPlace = await placesApi.getPlaceById(slug);
+      if (refreshedPlace) setPlace(refreshedPlace);
     }
   };
 
@@ -249,6 +182,9 @@ export const PlaceDetailsPage = () => {
     return place.menu_images.filter((img): img is string => Boolean(img) && typeof img === 'string');
   }, [place]);
 
+  // Smooth-scrolls to a section further down the page (story, reviews, review form)
+  const jumpTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   const openPhoto = (i: number) => {
     setSelectedImageIndex(i);
     setIsLightboxOpen(true);
@@ -295,17 +231,27 @@ export const PlaceDetailsPage = () => {
   const submitterName = formatSubmitterName(place.submitted_by_name, place.submitted_by_email);
   const submitterInitial = (submitterName[0] || 'c').toUpperCase();
 
-  const facts = [
-    { icon: IndianRupee, label: 'Budget', value: formatBudget(place.budget_tier) },
-    { icon: CalendarDays, label: 'Best time', value: place.best_season || 'All year' },
-    { icon: Hourglass, label: 'Time needed', value: place.duration || 'Flexible' },
+  const priceLevel = budgetLevel(place.budget_tier);
+  const facts: Fact[] = [
+    {
+      icon: IndianRupee,
+      label: 'Budget',
+      value: formatBudget(place.budget_tier).replace(' / person', ''),
+      meter: { level: priceLevel, max: 3, symbol: '₹', label: ['Free', 'Low cost', 'Mid range', 'Pricey'][priceLevel] },
+      note: priceLevel ? 'Per person, roughly' : 'No ticket needed',
+    },
+    { icon: CalendarDays, label: 'Best time', value: place.best_season || 'All year', status: seasonStatus(place.best_season) },
+    { icon: Hourglass, label: 'Time needed', value: place.duration || 'Flexible', note: durationNote(place.duration) },
     {
       icon: Clock,
       label: 'Hours',
+      status: isOpen247(place.opening_hours, place.closing_hours)
+        ? { label: 'Open now · never closes', tone: 'open' }
+        : hoursStatus(place.opening_hours, place.closing_hours),
       value: isHoursInDescription(place.opening_hours, place.closing_hours) ? (
         <button
           type="button"
-          onClick={() => document.getElementById('place-story')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          onClick={() => jumpTo('place-story')}
           className="text-left underline decoration-accent/50 underline-offset-4 hover:text-accent-text transition-colors"
         >
           Check description
@@ -314,7 +260,7 @@ export const PlaceDetailsPage = () => {
         hours
       ),
     },
-    { icon: CategoryIcon, label: 'Category', value: place.category },
+    { icon: CategoryIcon, label: 'Category', value: place.category, note: 'See more like this', href: `/explore?category=${encodeURIComponent(place.category)}` },
   ];
 
   const passFields = [
@@ -330,21 +276,10 @@ export const PlaceDetailsPage = () => {
     { label: 'Submitted by', value: submitterName },
   ];
 
-  const nearby = place.nearby_facilities
-    ? place.nearby_facilities
-        .split(',')
-        .map((f) => f.trim())
-        .filter(Boolean)
-    : [];
-
-  const knowBefore = [
-    { icon: Navigation, label: 'Getting there', content: place.transport_options || 'Not listed yet. Cabs and buses reach most places in and around the city.' },
-    { icon: MapPin, label: 'Nearby', content: nearby.length ? nearby.join(' · ') : 'Not listed yet.' },
-    { icon: AlertTriangle, label: 'Stay safe', content: 'Check the weather before you leave and follow local guidelines.' },
-    { icon: Leaf, label: 'Leave no trace', content: 'Respect the local environment. Carry your waste back with you.' },
-  ];
-
-  const paragraphs = (place.description || '').split(/\n+/).map((p) => p.trim()).filter(Boolean);
+  // The description sorted into where / when / what to see; empty parts are left out
+  const sections = describePlace(place.description);
+  const mapUrl =
+    place.map_link || (place.latitude != null && place.longitude != null ? `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}` : null);
 
   return (
     <div className="w-full bg-sand min-h-screen">
@@ -387,21 +322,41 @@ export const PlaceDetailsPage = () => {
             <span className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-[#F4B08A]" /> {location}
             </span>
-            {place.rating > 0 && (
-              <span className="flex items-center gap-2">
+            {place.rating > 0 ? (
+              <button type="button" onClick={() => jumpTo('place-reviews')} className="flex items-center gap-2 hover:text-white transition-colors group">
                 <Star className="w-4 h-4 text-[#F4C56A] fill-[#F4C56A]" />
                 <span className="text-sand font-semibold">{place.rating.toFixed(1)}</span>
-                <span className="text-sand/60">
+                <span className="text-sand/60 underline decoration-sand/30 underline-offset-4 group-hover:text-sand group-hover:decoration-sand/70 transition-colors">
                   · {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
                 </span>
-              </span>
+              </button>
+            ) : (
+              <button type="button" onClick={() => jumpTo('write-review')} className="flex items-center gap-2 text-sand/70 hover:text-white transition-colors">
+                <Star className="w-4 h-4 text-[#F4C56A]" />
+                <span className="underline decoration-sand/30 underline-offset-4">No reviews yet · be the first</span>
+              </button>
             )}
-            <span className="flex items-center gap-1.5 text-xs text-[#D8DEDA]/90 bg-white/10 px-2.5 py-1 rounded-full backdrop-blur-sm border border-white/10">
-              <Compass className="w-3.5 h-3.5 text-[#F4B08A]" />
-              <span>
-                submitted by <span className="lowercase font-medium text-white">{submitterName}</span>
+            <button
+              type="button"
+              onClick={() => jumpTo('place-story')}
+              aria-label={`Submitted by ${submitterName}. Read the story`}
+              className="flex items-center gap-2.5 bg-white/10 hover:bg-white/[0.18] pl-1 pr-3.5 py-1 rounded-full backdrop-blur-md border border-white/15 hover:border-white/30 transition-colors"
+            >
+              <span className="w-7 h-7 rounded-full bg-[#F4B08A] text-night flex items-center justify-center font-display text-xs font-bold uppercase shrink-0">
+                {submitterInitial}
               </span>
-            </span>
+              <span className="flex flex-col items-start leading-tight text-left">
+                <span className="text-[10px] uppercase tracking-[0.14em] text-sand/60">Submitted by</span>
+                <span className="text-sm font-semibold text-white capitalize">{submitterName}</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => jumpTo('write-review')}
+              className="flex items-center gap-1.5 text-xs text-[#D8DEDA]/90 bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-full backdrop-blur-sm border border-white/10 transition-colors"
+            >
+              <PenLine className="w-3.5 h-3.5 text-[#F4B08A]" /> Write a review
+            </button>
           </div>
         }
         actions={
@@ -457,171 +412,16 @@ export const PlaceDetailsPage = () => {
               </div>
             </Reveal>
             <SplitHeading className="text-display text-ink mb-8" style={{ fontSize: 'clamp(2rem, 4vw, 3.25rem)' }} parts={[{ text: 'Why people' }, { text: 'love it.', accent: true }]} />
-            <Reveal delay={0.1} className="space-y-5 max-w-[64ch]">
-              {paragraphs.length ? (
-                paragraphs.map((para, i) => (
-                  <p
-                    key={i}
-                    className={`text-body text-lg leading-[1.8] ${
-                      i === 0 && para.length > 140 ? 'first-letter:font-display first-letter:text-[4.2rem] first-letter:leading-[0.8] first-letter:float-left first-letter:mr-3 first-letter:mt-1.5 first-letter:text-accent' : ''
-                    }`}
-                  >
-                    {para}
-                  </p>
-                ))
-              ) : (
-                <p className="text-muted text-lg">No description yet. Been here? Leave a review below and tell people what it's like.</p>
-              )}
-            </Reveal>
-          </section>
-
-          {/* Know before you go */}
-          <section>
-            <Reveal>
-              <p className="section-label mb-5">Know before you go</p>
-            </Reveal>
-            <SplitHeading className="text-display text-ink mb-10" style={{ fontSize: 'clamp(2rem, 4vw, 3.25rem)' }} parts={[{ text: 'Plan it' }, { text: 'properly.', accent: true }]} />
-            <Reveal stagger={0.08} className="grid sm:grid-cols-2 gap-4">
-              {knowBefore.map(({ icon: Icon, label, content }) => (
-                <RevealItem key={label} className="card p-6 h-full">
-                  <span className="w-11 h-11 rounded-2xl bg-accent-soft text-accent-text flex items-center justify-center mb-5">
-                    <Icon className="w-5 h-5" />
-                  </span>
-                  <h3 className="font-display text-xl text-ink mb-2">{label}</h3>
-                  <p className="text-sm text-muted leading-relaxed">{content}</p>
-                </RevealItem>
-              ))}
-            </Reveal>
+            <PlaceStory sections={sections} mapUrl={mapUrl} />
           </section>
 
           {/* Community reviews */}
-          <section>
+          <section id="place-reviews" className="scroll-mt-32">
             <Reveal>
               <p className="section-label mb-5">Community reviews</p>
             </Reveal>
-            <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
-              <SplitHeading className="text-display text-ink" style={{ fontSize: 'clamp(2rem, 4vw, 3.25rem)' }} parts={[{ text: 'What explorers' }, { text: 'say.', accent: true }]} />
-              {reviews.length > 0 && (
-                <Reveal className="flex items-center gap-4">
-                  <span className="font-display text-5xl text-ink leading-none">{(place.rating || 0).toFixed(1)}</span>
-                  <div>
-                    <StarRow rating={place.rating || 0} />
-                    <p className="text-xs text-muted mt-1">
-                      {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
-                    </p>
-                  </div>
-                </Reveal>
-              )}
-            </div>
-
-            {/* Reviews list */}
-            {isLoadingReviews ? (
-              <div className="space-y-4">
-                <div className="skeleton h-28 w-full rounded-[22px]" />
-                <div className="skeleton h-28 w-full rounded-[22px]" />
-              </div>
-            ) : reviews.length === 0 ? (
-              <Reveal className="card p-10 text-center mb-8">
-                <MessageSquare className="w-8 h-8 text-faint mx-auto mb-3" />
-                <p className="font-display text-xl text-ink">Be the first to share your experience</p>
-                <p className="text-sm text-muted mt-1">Help fellow explorers know what to expect at {place.name}.</p>
-              </Reveal>
-            ) : (
-              <Reveal stagger={0.07} className="grid gap-4 mb-10">
-                {reviews.map((rev) => (
-                  <RevealItem key={rev.id}>
-                    <article className="card p-6">
-                      <div className="flex items-center justify-between gap-3 mb-4">
-                        <div className="flex items-center gap-3">
-                          <span className="w-10 h-10 rounded-full bg-sage-soft text-sage-text font-display text-lg flex items-center justify-center">T</span>
-                          <div>
-                            <p className="text-sm font-semibold text-ink">Traveller #{rev.user_id}</p>
-                            <StarRow rating={rev.rating} size="w-3.5 h-3.5" />
-                          </div>
-                        </div>
-                        <span className="text-xs text-muted">
-                          {new Date(rev.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
-                      </div>
-                      <p className="text-body leading-relaxed whitespace-pre-line">{rev.comment}</p>
-                    </article>
-                  </RevealItem>
-                ))}
-              </Reveal>
-            )}
-
-            {/* Write a review */}
-            <Reveal className="rounded-[26px] bg-night text-[#D8DEDA] p-7 sm:p-9 grain relative overflow-hidden">
-              <div className="relative z-10">
-                <h3 className="font-display text-2xl text-sand mb-1">Been here? Leave a review</h3>
-                <p className="text-sm text-[#AEB8B4] mb-6">Tips on timing, parking or the best viewpoints help the next traveller.</p>
-
-                {reviewSuccess && (
-                  <div className="mb-5 p-3.5 rounded-2xl text-sm flex items-center gap-2 bg-[#2F7D5B]/20 border border-[#2F7D5B]/40 text-[#9FE0BF]" role="status">
-                    <CheckCircle className="w-4 h-4 shrink-0" />
-                    <span>{reviewSuccess}</span>
-                  </div>
-                )}
-
-                {reviewError && (
-                  <div className="mb-5 p-3.5 rounded-2xl text-sm flex items-center gap-2 bg-[#B42318]/20 border border-[#B42318]/40 text-[#F6B4AC]" role="alert">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>{reviewError}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handleReviewSubmit} className="space-y-5">
-                  <div>
-                    <p className="text-label text-[#AEB8B4] mb-2">Your rating</p>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1" onMouseLeave={() => setHoverRating(0)}>
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            type="button"
-                            onClick={() => setNewRating(star)}
-                            onMouseEnter={() => setHoverRating(star)}
-                            className="p-1 -m-0.5 rounded transition-transform hover:scale-110"
-                            aria-label={`${star} star${star > 1 ? 's' : ''}`}
-                            aria-pressed={newRating === star}
-                          >
-                            <Star className={`w-7 h-7 transition-colors ${star <= (hoverRating || newRating) ? 'text-[#F4C56A] fill-[#F4C56A]' : 'text-white/20 fill-white/10'}`} />
-                          </button>
-                        ))}
-                      </div>
-                      <span className="font-mono text-sm text-sand/70">{hoverRating || newRating} / 5</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label htmlFor="review-comment" className="text-label text-[#AEB8B4] block mb-2">
-                      Your experience
-                    </label>
-                    <textarea
-                      id="review-comment"
-                      rows={3}
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      placeholder="What did you love? Any tips on parking, timing or viewpoints?"
-                      className="field resize-y !bg-white/5 !border-white/15 !text-sand placeholder:!text-white/40 focus:!border-sand focus:!bg-white/10"
-                    />
-                  </div>
-
-                  <div className="flex justify-end on-photo">
-                    <button type="submit" disabled={isSubmittingReview} className="btn-primary">
-                      {isSubmittingReview ? (
-                        <>
-                          <span className="w-4 h-4 border-2 border-ink/50 border-t-transparent rounded-full animate-spin" />
-                          Posting…
-                        </>
-                      ) : (
-                        'Post review'
-                      )}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </Reveal>
+            <SplitHeading className="text-display text-ink mb-8" style={{ fontSize: 'clamp(2rem, 4vw, 3.25rem)' }} parts={[{ text: 'What explorers' }, { text: 'say.', accent: true }]} />
+            <PlaceReviews placeName={place.name} rating={place.rating || 0} reviews={reviews} loading={isLoadingReviews} onPost={postReview} />
           </section>
 
           {/* Footer: source + admin */}

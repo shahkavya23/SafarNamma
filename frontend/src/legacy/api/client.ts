@@ -1,0 +1,760 @@
+import { MOCK_PLACES } from '../mock/data';
+import { MOCK_GROUPS } from '../mock/groups';
+import type { Place, Group, GroupRequest, GroupMember, Submission, Review, AppNotification, Itinerary, ItineraryStop, CreateItineraryData } from '../types';
+import { PLACE_CATEGORIES } from '../types';
+export { PLACE_CATEGORIES };
+
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/";
+
+export const TOKEN_KEY = 'roamlocal_token';
+// Fired when the backend rejects our session so AuthContext can sign the user out
+export const AUTH_EXPIRED_EVENT = 'auth:expired';
+
+// Every request carries the session token; the backend decides who the caller is from it
+const apiFetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
+  let token: string | null = null;
+  try {
+    token = localStorage.getItem(TOKEN_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+  const headers = new Headers(init.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(url, { ...init, headers });
+  if (response.status === 401 && token) window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  return response;
+};
+
+// FastAPI returns validation errors as a list of objects; turn any detail into readable text
+const errorMessage = (detail: unknown, fallback: string): string => {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail.map((d) => {
+      const field = Array.isArray(d?.loc) ? d.loc[d.loc.length - 1] : null;
+      return field ? `${field}: ${d?.msg}` : d?.msg;
+    }).filter(Boolean);
+    if (msgs.length) return msgs.join('; ');
+  }
+  return fallback;
+};
+
+export const authApi = {
+  // Trades the Google ID token for our own session token (verified server-side)
+  loginWithGoogle: async (credential: string): Promise<{ token: string; email: string; is_admin: boolean }> => {
+    // Long enough for a sleeping Render instance to wake, short enough that sign-in never spins forever
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
+    let response: Response;
+    try {
+      response = await fetch(`${BASE_URL}api/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (controller.signal.aborted) throw new Error('The server is taking too long to respond. Please try again in a minute.');
+      throw new Error("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      clearTimeout(timer);
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(errorMessage(data.detail, 'Sign-in failed. Please try again.'));
+    return data;
+  },
+};
+
+export const placesApi = {
+  getPlaces: async (filters?: { category?: string; maxPrice?: number }): Promise<Place[]> => {
+
+    // 1. Fetch from your real FastAPI backend!
+    const response = await apiFetch(`${BASE_URL}api/destinations`);
+    const data = await response.json();
+    // 2. Set result to the data we got from Python
+    let result = data;
+    // 3. Apply the category filter if the user clicked a category
+    if (filters?.category) {
+      result = result.filter((p: any) => p.category.toLowerCase() === filters.category!.toLowerCase());
+    }
+
+    // (Note: We are ignoring maxPrice filter for now since our backend uses budget_tier instead of numbers)
+
+    return result;
+  },
+
+  getAllPlaces: async (): Promise<Place[]> => {
+    return placesApi.getPlaces();
+  },
+
+  getPopularWeekend: async (): Promise<Place[]> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/destinations/popular-weekend`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch popular weekend destinations:", error);
+      return [];
+    }
+  },
+
+  getPlaceById: async (id: string): Promise<Place | undefined> => {
+    const response = await apiFetch(`${BASE_URL}api/destinations/${id}`)
+
+    if (!response.ok) {
+      return undefined
+    }
+
+    return await response.json()
+  },
+
+  deletePlace: async (id: number): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/destinations/${id}`, {
+        method: 'DELETE',
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to delete place", error);
+      return false;
+    }
+  },
+
+  editPlace: async (id: number, data: any): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/destinations/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to edit place", error);
+      return false;
+    }
+  },
+
+  // Changes only where a place is. Throws on failure, so callers can't mistake it for saved.
+  updatePlaceLocation: async (
+    id: number,
+    data: { map_link: string | null; latitude: number | null; longitude: number | null },
+  ): Promise<Place> => {
+    const response = await apiFetch(`${BASE_URL}api/destinations/${id}/location`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(`Couldn't save the location, so the stop wasn't added. ${errorMessage(err.detail, 'Please try again.')}`);
+    }
+    return response.json();
+  },
+
+  createPlace: async (data: any): Promise<Place | null> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/destinations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        console.error("Backend rejected custom place:", err);
+        return null;
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to create custom place", error);
+      return null;
+    }
+  }
+
+};
+
+export const groupsApi = {
+  // 1. Fetch all travel groups
+  getGroups: async (): Promise<Group[]> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/groups`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch groups", error);
+      return [];
+    }
+  },
+
+  // Trips I hosted or was approved on, finished ones included (My trips, story maker)
+  getMyTrips: async (): Promise<Group[]> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/me/trips`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch my trips", error);
+      return [];
+    }
+  },
+
+  // 2. Fetch single group (passes logged-in user email to check if chat_link should be revealed)
+  getGroupById: async (id: string | number, userEmail?: string): Promise<Group | undefined> => {
+    try {
+      const url = userEmail
+        ? `${BASE_URL}api/groups/${id}?user_email=${encodeURIComponent(userEmail)}`
+        : `${BASE_URL}api/groups/${id}`;
+      const response = await apiFetch(url);
+      if (!response.ok) return undefined;
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch group details", error);
+      return undefined;
+    }
+  },
+
+  // 3. Create a new group
+  createGroup: async (data: Omit<Group, 'id' | 'current_members' | 'status' | 'created_at'>): Promise<Group | null> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/groups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(errorMessage(err.detail, 'Failed to create group'));
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to create group", error);
+      throw error;
+    }
+  },
+
+  // 4. Request to join a group
+  requestToJoin: async (groupId: number, userName: string, userEmail: string): Promise<GroupRequest | null> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/groups/${groupId}/requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group_id: groupId, user_name: userName, user_email: userEmail })
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(errorMessage(err.detail, 'Failed to send join request'));
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to send join request", error);
+      throw error;
+    }
+  },
+
+  // 5. Organizer gets pending requests
+  getRequests: async (groupId: number, organizerEmail: string): Promise<GroupRequest[]> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/groups/${groupId}/requests?organizer_email=${encodeURIComponent(organizerEmail)}`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch requests", error);
+      return [];
+    }
+  },
+
+  // 6. Organizer approves (✅) or rejects (❌) a request
+  updateRequestStatus: async (requestId: number, newStatus: 'approved' | 'rejected', organizerEmail: string): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/groups/requests/${requestId}/status?new_status=${newStatus}&organizer_email=${encodeURIComponent(organizerEmail)}`, {
+        method: 'PUT'
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to update request status", error);
+      return false;
+    }
+  },
+
+  // 7. Organizer deletes the group (enforcing 2-hour cooldown and ownership)
+  deleteGroup: async (groupId: number, organizerEmail: string): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/groups/${groupId}?organizer_email=${encodeURIComponent(organizerEmail)}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(errorMessage(err.detail, 'Failed to delete group'));
+      }
+      return true;
+    } catch (error) {
+      console.error("Failed to delete group", error);
+      throw error;
+    }
+  },
+
+  // 8. Organizer updates group settings (enforcing 12-hour cutoff and route immutability)
+  updateGroup: async (groupId: number | string, data: Partial<Group>): Promise<Group> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/groups/${groupId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(errorMessage(err.detail, 'Failed to update group'));
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to update group", error);
+      throw error;
+    }
+  },
+
+  // 9. Organizer lists the approved people on the trip; the search runs in the database
+  getMembers: async (groupId: number | string, search = ''): Promise<GroupMember[]> => {
+    const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+    const response = await apiFetch(`${BASE_URL}api/groups/${groupId}/members${query}`);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(err.detail, 'Failed to load the crew'));
+    }
+    return await response.json();
+  },
+
+  // 10. Organizer removes an approved person; returns the trip with its seat freed
+  removeMember: async (groupId: number | string, memberId: number): Promise<Group> => {
+    const response = await apiFetch(`${BASE_URL}api/groups/${groupId}/members/${memberId}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(err.detail, 'Failed to remove this person'));
+    }
+    return await response.json();
+  }
+};
+
+export const submissionsApi = {
+  submitPlace: async (data: any): Promise<boolean> => {
+    try {
+
+      const response = await apiFetch(`${BASE_URL}api/destinations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      })
+
+      if (response.ok) {
+        return true;
+      } else {
+        const err = await response.json();
+        const msg = errorMessage(err.detail, 'Backend rejected the submission');
+        console.error("Backend rejected the submission:", msg);
+        throw new Error(msg);
+      }
+    } catch (error) {
+      console.error("Failed to connect to backend", error);
+      throw error;
+    }
+  },
+  getPendingSubmissions: async (): Promise<Place[]> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/admin/submissions`);
+      if (!response.ok) {
+        console.error("Failed to fetch pending submissions:", response.statusText);
+        return [];
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Network error fetching submissions:", error);
+      return [];
+    }
+  },
+
+  approveSubmission: async (
+    id: number | string,
+    data: {
+      category?: string;
+      duration: string;
+      best_season: string;
+      description: string;
+      opening_hours: string;
+      closing_hours: string;
+      transport_options: string;
+      nearby_facilities: string;
+      image_url?: string;
+      gallery_images?: string[];
+      menu_images?: string[];
+      map_link?: string;
+    }
+  ): Promise<boolean> => {
+    const response = await apiFetch(`${BASE_URL}api/admin/submissions/${id}/approve`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    // Surface the backend's reason (missing photos, empty fields…) instead of a generic failure
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(body.detail, 'Failed to approve submission.'));
+    }
+    return true;
+  },
+
+  rejectSubmission: async (id: number | string): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/admin/submissions/${id}/reject`, {
+        method: 'DELETE'
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to reject submission:", error);
+      return false;
+    }
+  },
+
+  getUserSubmissions: async (userEmail: string): Promise<Place[]> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/users/submissions?user_email=${encodeURIComponent(userEmail)}`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch user submissions:", error);
+      return [];
+    }
+  },
+
+  setPopularWeekend: async (destinationIds: number[]): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/admin/popular-weekend`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destination_ids: destinationIds })
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(errorMessage(err.detail, 'Failed to update popular weekend destinations'));
+      }
+      return true;
+    } catch (error) {
+      console.error("Failed to update popular weekend destinations:", error);
+      throw error;
+    }
+  }
+};
+
+
+
+export const reviewApi = {
+
+  //Fetch all reviews for a destination
+
+  getReviews: async (destination_id: number): Promise<Review[]> => {
+
+    try {
+      const response = await apiFetch(`${BASE_URL}api/destinations/${destination_id}/reviews`);
+
+      if (!response.ok) {
+        console.error("Failed to fetch reviews:", response.statusText);
+        return [];
+      }
+
+      return await response.json();
+    }
+    catch (error) {
+      console.error("Network error fetching reviews:", error);
+      return []
+    }
+
+  },
+
+
+
+
+
+
+  createReview: async (data: { destination_id: number; rating: number; comment: string }): Promise<Review> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/reviews`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorMessage(errorData.detail, "Failed to submit review"))
+      }
+
+      return await response.json();
+    }
+    catch (error) {
+      console.error("Error creating review:", error);
+      throw error;
+    }
+  }
+
+};
+
+export const notificationsApi = {
+  getNotifications: async (userEmail: string, isAdmin: boolean = false): Promise<{ unread_count: number; notifications: AppNotification[] }> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/notifications?user_email=${encodeURIComponent(userEmail)}&is_admin=${isAdmin}`);
+      if (!response.ok) return { unread_count: 0, notifications: [] };
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+      return { unread_count: 0, notifications: [] };
+    }
+  },
+
+  markAsRead: async (notificationId: number): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/notifications/${notificationId}/read`, {
+        method: 'PUT'
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error);
+      return false;
+    }
+  },
+
+  markAllAsRead: async (userEmail: string, isAdmin: boolean = false): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/notifications/read-all?user_email=${encodeURIComponent(userEmail)}&is_admin=${isAdmin}`, {
+        method: 'PUT'
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error);
+      return false;
+    }
+  },
+
+  clearAll: async (userEmail: string, isAdmin: boolean = false): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/notifications/clear-all?user_email=${encodeURIComponent(userEmail)}&is_admin=${isAdmin}`, {
+        method: 'DELETE'
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to clear notifications:", error);
+      return false;
+    }
+  },
+
+  deleteNotification: async (notificationId: number): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/notifications/${notificationId}`, {
+        method: 'DELETE'
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to delete notification:", error);
+      return false;
+    }
+  }
+};
+
+export const userApi = {
+  getProfile: async (email: string): Promise<{ id: number; email: string; name?: string; avatar?: string; bio?: string; role: string; created_at?: string } | null> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/users/profile?email=${encodeURIComponent(email)}`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch user profile:", error);
+      return null;
+    }
+  },
+
+  updateProfile: async (data: { email: string; name?: string; avatar?: string; bio?: string }): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/users/profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to update user profile:", error);
+      return false;
+    }
+  }
+};
+
+export const favoritesApi = {
+  getFavorites: async (userEmail: string): Promise<Place[]> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/favorites?user_email=${encodeURIComponent(userEmail)}`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch favorites:", error);
+      return [];
+    }
+  },
+
+  addFavorite: async (destinationId: number, userEmail: string): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/favorites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          destination_id: destinationId,
+          user_email: userEmail
+        })
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to add favorite:", error);
+      return false;
+    }
+  },
+
+  removeFavorite: async (destinationId: number, userEmail: string): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/favorites/${destinationId}?user_email=${encodeURIComponent(userEmail)}`, {
+        method: 'DELETE'
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to remove favorite:", error);
+      return false;
+    }
+  }
+};
+
+
+export const presenceApi = {
+  // Heartbeat: tells the backend this tab is open; returns the live count
+  ping: async (sessionId: string): Promise<number | null> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/presence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.display;
+    } catch {
+      return null;
+    }
+  },
+};
+
+
+export const itinerariesApi = {
+  getAll: async (): Promise<Itinerary[]> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/itineraries`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (err) {
+      console.error('Failed to fetch itineraries:', err);
+      return [];
+    }
+  },
+
+  getById: async (id: number | string): Promise<Itinerary | null> => {
+    try {
+      const response = await apiFetch(`${BASE_URL}api/itineraries/${id}`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (err) {
+      console.error(`Failed to fetch itinerary ${id}:`, err);
+      return null;
+    }
+  },
+
+  create: async (data: CreateItineraryData): Promise<Itinerary> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(errorData?.detail, 'Failed to create itinerary'));
+    }
+    return await response.json();
+  },
+
+  update: async (id: number | string, data: Partial<CreateItineraryData>): Promise<Itinerary> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(errorData?.detail, 'Failed to update itinerary'));
+    }
+    return await response.json();
+  },
+
+  delete: async (id: number | string): Promise<boolean> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries/${id}`, {
+      method: 'DELETE',
+    });
+    return response.ok;
+  },
+
+  addStop: async (
+    itineraryId: number | string,
+    stop: {
+      destination_id: number;
+      order_index: number;
+      transport_mode?: string;
+      note?: string;
+      conflict_mode?: 'shift' | 'replace';
+    }
+  ): Promise<ItineraryStop> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries/${itineraryId}/stops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stop),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(errorData?.detail, 'Failed to add stop'));
+    }
+    return await response.json();
+  },
+
+  updateStop: async (
+    stopId: number | string,
+    data: { transport_mode?: string; note?: string }
+  ): Promise<ItineraryStop> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries/stops/${stopId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorMessage(errorData?.detail, 'Failed to update stop'));
+    }
+    return await response.json();
+  },
+
+  deleteStop: async (stopId: number | string): Promise<boolean> => {
+    const response = await apiFetch(`${BASE_URL}api/itineraries/stops/${stopId}`, {
+      method: 'DELETE',
+    });
+    return response.ok;
+  },
+};

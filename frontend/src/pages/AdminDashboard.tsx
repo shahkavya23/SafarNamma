@@ -31,6 +31,7 @@ import { setScrollLocked } from '../hooks/useLenis';
 import { Link } from 'react-router-dom';
 import { hoursMarker, hoursMode } from '../utils/hours';
 import { HoursModeToggles } from '../components/ui/Open247Toggle';
+import { MapLinkNotice } from '../components/places/LocationFields';
 
 // Curate & Approve requirements (same numbers as the backend's approve_submission)
 const MIN_GALLERY = 3;
@@ -71,7 +72,8 @@ export const AdminDashboard = () => {
     nearby_facilities: '',
     image_url: '',
     gallery_images: [] as string[],
-    menu_images: [] as string[]
+    menu_images: [] as string[],
+    map_link: ''
   });
   const [isPublishing, setIsPublishing] = useState(false);
   const [showCurationErrors, setShowCurationErrors] = useState(false);
@@ -133,7 +135,8 @@ export const AdminDashboard = () => {
       nearby_facilities: place.nearby_facilities || '',
       image_url: place.image_url || '',
       gallery_images: place.gallery_images || [],
-      menu_images: place.menu_images || []
+      menu_images: place.menu_images || [],
+      map_link: place.map_link || ''
     });
     setShowCurationErrors(false);
     setCurationError(null);
@@ -179,6 +182,7 @@ export const AdminDashboard = () => {
     try {
       await submissionsApi.approveSubmission(selectedForApproval.id, {
         ...curationForm,
+        map_link: curationForm.map_link.trim() || undefined,
         gallery_images: curationForm.gallery_images.filter((u) => u && u !== curationForm.image_url),
         menu_images: isCafe ? curationForm.menu_images : [],
       });
@@ -401,15 +405,19 @@ export const AdminDashboard = () => {
                       <span className="flex items-center gap-1">
                         <IndianRupee className="w-3.5 h-3.5 text-gray-400" /> Tier: {sub.budget_tier}
                       </span>
-                      {sub.map_link && (
+                      {sub.map_link ? (
                         <a 
                           href={sub.map_link} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-emerald-700 hover:underline"
+                          className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 hover:bg-emerald-100 font-semibold text-xs"
                         >
-                          <ExternalLink className="w-3.5 h-3.5" /> Google Maps
+                          <ExternalLink className="w-3.5 h-3.5" /> Google Maps Linked
                         </a>
+                      ) : (
+                        <span className="flex items-center gap-1 text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 font-semibold text-xs">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> No Google Maps Link
+                        </span>
                       )}
                     </div>
 
@@ -807,6 +815,52 @@ export const AdminDashboard = () => {
                     className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-2 focus:ring-[#1a4731] outline-none"
                   />
                 </div>
+              </div>
+
+              {/* Google Maps Location Curation Section */}
+              <div className="p-4 rounded-2xl border bg-gray-50/70 border-gray-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Navigation className="w-4 h-4 text-[#1a4731]" />
+                    Google Maps Link
+                  </label>
+                  {curationForm.map_link ? (
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200">
+                      <CheckCircle className="w-3 h-3 text-emerald-500" /> Location Linked
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-200">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Missing Maps Link
+                    </span>
+                  )}
+                </div>
+
+                {curationForm.map_link ? (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold">Google Maps Link Verified</p>
+                      <p className="text-emerald-700 text-[11px]">This destination will plot as an interactive waypoint pin on Itinerary route maps.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold">No Google Maps link attached by the submitter!</p>
+                      <p className="text-amber-700 text-[11px]">Travelers won't be able to navigate to this place and it will NOT show a pin on itinerary route maps unless a link is provided.</p>
+                    </div>
+                  </div>
+                )}
+
+                <input
+                  type="url"
+                  value={curationForm.map_link}
+                  onChange={(e) => setCurationForm({ ...curationForm, map_link: e.target.value })}
+                  placeholder="https://www.google.com/maps/place/..."
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-2 focus:ring-[#1a4731] outline-none"
+                />
+                <MapLinkNotice mapLink={curationForm.map_link} />
               </div>
 
               {/* Category Field */}

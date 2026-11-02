@@ -29,6 +29,8 @@ interface CarouselStackedProps<T> {
   /** Bring this card to the front; pair with onActiveChange to stay in step with the deck */
   activeIndex?: number;
   onActiveChange?: (index: number) => void;
+  /** How many cards show on each side of the front one on screens 640px and wider (phones always show one) */
+  visibleSide?: number;
   className?: string;
 }
 
@@ -40,13 +42,16 @@ interface CarouselConfig {
   yMultiplier: number;
   rotationMultiplier: number;
   scaleReduction: number;
+  visibleSide: number;
 }
 
-const getCarouselConfig = (windowWidth: number, cardWidth: number): CarouselConfig => {
+const getCarouselConfig = (windowWidth: number, cardWidth: number, visibleSide: number): CarouselConfig => {
   if (windowWidth < 640) {
-    return { distanceDivisor: 120, velocityDivisor: 500, sensitivity: 240, xMultiplier: cardWidth * 0.88, yMultiplier: 10, rotationMultiplier: 3, scaleReduction: 0.06 };
+    return { distanceDivisor: 120, velocityDivisor: 500, sensitivity: 240, xMultiplier: cardWidth * 0.88, yMultiplier: 10, rotationMultiplier: 3, scaleReduction: 0.06, visibleSide: 1 };
   }
-  return { distanceDivisor: 200, velocityDivisor: 800, sensitivity: 300, xMultiplier: cardWidth * 0.62, yMultiplier: 22, rotationMultiplier: 5, scaleReduction: 0.1 };
+  // With more cards in view they sit closer together so the outer ones stay on screen
+  const spacing = visibleSide > 1 ? 0.5 : 0.62;
+  return { distanceDivisor: 200, velocityDivisor: 800, sensitivity: 300, xMultiplier: cardWidth * spacing, yMultiplier: 22, rotationMultiplier: 5, scaleReduction: 0.1, visibleSide };
 };
 
 const SPRING = { type: 'spring', stiffness: 200, damping: 30, mass: 1 } as const;
@@ -61,6 +66,7 @@ const CarouselStacked = <T,>({
   cardWidth,
   activeIndex,
   onActiveChange,
+  visibleSide = 1,
   className,
 }: CarouselStackedProps<T>) => {
   const scrollProgress = useMotionValue(0);
@@ -102,7 +108,7 @@ const CarouselStacked = <T,>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [total, scrollProgress]);
 
-  const config = React.useMemo(() => getCarouselConfig(windowWidth, cardWidth(windowWidth)), [windowWidth, cardWidth]);
+  const config = React.useMemo(() => getCarouselConfig(windowWidth, cardWidth(windowWidth), visibleSide), [windowWidth, cardWidth, visibleSide]);
 
   useMotionValueEvent(scrollProgress, 'change', (p) => {
     if (total) markActive(wrap(Math.round(p), total));
@@ -246,11 +252,14 @@ const StackedCard = ({ index, total, loops, isActive, progress, config, classNam
   const rotate = useTransform(offset, (o) => (Math.abs(o) < 0.05 ? 0 : o * config.rotationMultiplier));
   const y = useTransform(offset, (o) => (Math.abs(o) < 0.05 ? 0 : Math.abs(o) * config.yMultiplier));
   const scale = useTransform(offset, (o) => 1 - Math.abs(o) * config.scaleReduction);
-  // Only the front card and its neighbours show, so big cards never pile up behind each other
-  const opacity = useTransform(offset, [-1.4, -1, 0, 1, 1.4], [0, 1, 1, 1, 0]);
-  const pointerEvents = useTransform(offset, (o) => (Math.abs(o) > 1.2 ? 'none' : 'auto'));
+  // Only the front card and its nearest neighbours show, so big cards never pile up behind each other
+  const side = config.visibleSide;
+  const opacity = useTransform(offset, [-(side + 0.4), -side, 0, side, side + 0.4], [0, 1, 1, 1, 0]);
+  const pointerEvents = useTransform(offset, (o) => (Math.abs(o) > side + 0.2 ? 'none' : 'auto'));
   const zIndex = useTransform(offset, (o) => Math.round(100 - Math.abs(o) * 10));
-  const shade = useTransform(offset, [-1, -0.3, 0, 0.3, 1], [0.45, 0.15, 0, 0.15, 0.45]);
+  // The farther a card sits, the more it dims
+  const edgeShade = Math.min(0.7, 0.45 + (side - 1) * 0.15);
+  const shade = useTransform(offset, [-side, -0.3, 0, 0.3, side], [edgeShade, 0.15, 0, 0.15, edgeShade]);
 
   return (
     <motion.div

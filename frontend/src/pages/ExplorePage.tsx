@@ -1,20 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import {
-  AnimatePresence,
-  motion,
-  useMotionTemplate,
-  useReducedMotion,
-  useScroll,
-  useTransform,
-} from 'motion/react';
-import {
-  ArrowDown,
-  ArrowUpRight,
-  MapPin,
-  Search,
-  X,
-} from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { ArrowLeft, ArrowUpRight, MapPin, Search, X } from 'lucide-react';
 import type { Place } from '../types';
 import { PLACE_CATEGORIES } from '../types';
 import { placesApi } from '../api/client';
@@ -22,9 +9,10 @@ import { fuzzySearch } from '../utils/fuzzySearch';
 import { PlaceCard } from '../components/places/PlaceCard';
 import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal } from '../components/motion/Reveal';
-import { Counter } from '../components/motion/Counter';
 import { HorizontalScroller } from '../components/motion/HorizontalScroller';
-import { fallbackPhoto, optimizeImageUrl, photoProps } from '../utils/images';
+import { CategoryDiscs } from '../components/explore/CategoryDiscs';
+import { ALL_KEY, themeFor, themeStyle } from '../utils/categoryThemes';
+import { fallbackPhoto, optimizeImageUrl, photoProps, photoSrc } from '../utils/images';
 import { formatBudget, shortLocation } from '../utils/format';
 import { categoryIcon } from '../utils/categories';
 import { Chip } from '../components/ui/Chip';
@@ -94,6 +82,12 @@ export const ExplorePage = () => {
   const query = searchParams.get('q') || '';
   const categoryFilter = searchParams.get('category') || '';
   const budgetFilter = searchParams.get('budget') || '';
+  // `?category=all` means "show everything"; no category, search or budget at all means the picker
+  const isAll = categoryFilter === ALL_KEY;
+  const activeCategory = isAll ? '' : categoryFilter;
+  const landing = !categoryFilter && !query && !budgetFilter;
+  // The panel under the pointer (or mid-screen on phones) themes the landing
+  const [hovered, setHovered] = useState(ALL_KEY);
 
   // Local search text, written to the URL after a short pause
   const [searchText, setSearchText] = useState(query);
@@ -153,7 +147,7 @@ export const ExplorePage = () => {
 
     const max = budgetFilter ? Number(budgetFilter) : null;
     const inFilters = (p: Place) => {
-      if (categoryFilter && p.category.toLowerCase() !== categoryFilter.toLowerCase()) return false;
+      if (activeCategory && p.category.toLowerCase() !== activeCategory.toLowerCase()) return false;
       if (max !== null) {
         const cost = Number(p.budget_tier || 0);
         if (Number.isNaN(cost) || cost > max) return false;
@@ -168,7 +162,7 @@ export const ExplorePage = () => {
       // Matches for the search that the category/budget filters are hiding
       hiddenByFilters: query ? search.items.length - filtered.length : 0,
     };
-  }, [places, query, categoryFilter, budgetFilter]);
+  }, [places, query, activeCategory, budgetFilter]);
 
   const hiddenGems = useMemo(() => places.filter((p) => p.is_hidden_gem), [places]);
   // The pinned strip shows hidden gems; until the community has flagged enough, it shows the best-rated places
@@ -177,8 +171,21 @@ export const ExplorePage = () => {
     const rated = places.filter((p) => p.image_url).sort((a, b) => (b.rating || 0) - (a.rating || 0));
     return { kind: 'rated' as const, items: rated.slice(0, 8) };
   }, [places, hiddenGems]);
-  const categoryCount = useMemo(() => new Set(places.map((p) => p.category)).size, [places]);
-  const freeCount = useMemo(() => places.filter((p) => !Number(p.budget_tier)).length, [places]);
+  // Banner photo for the chosen category: its best-rated place with a photo
+  const bannerPhoto = useMemo(() => {
+    const pool = activeCategory ? places.filter((p) => p.category === activeCategory) : places;
+    const best = pool.filter((p) => p.image_url).sort((a, b) => (b.rating || 0) - (a.rating || 0))[0];
+    const theme = themeFor(activeCategory);
+    return (!theme.ownPhoto && optimizeImageUrl(best?.image_url, 1600)) || photoSrc(theme.photo, 1600);
+  }, [places, activeCategory]);
+  const categoryTotal = useMemo(
+    () => (activeCategory ? places.filter((p) => p.category === activeCategory).length : places.length),
+    [places, activeCategory]
+  );
+
+  // The whole page wears the hovered panel's look on the picker, and the chosen category's after
+  const theme = themeFor(landing ? hovered : activeCategory || ALL_KEY);
+  const pickCategory = (key: string) => updateParam('category', key);
 
   const showOutsideFilters = () => {
     const params = new URLSearchParams(searchParams);
@@ -200,73 +207,55 @@ export const ExplorePage = () => {
     setSearchParams(new URLSearchParams());
   };
 
-  const hasFilters = Boolean(query || categoryFilter || budgetFilter);
-  const showStrip = !hasFilters && !isLoading && strip.items.length >= 3;
-
-  /* ── Hero: the photo shrinks into a rounded frame as you scroll away ── */
-  const heroRef = useRef<HTMLElement>(null);
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
-  const inset = useTransform(scrollYProgress, [0, 1], [0, 1]);
-  const clipPath = useMotionTemplate`inset(calc(${inset} * 6%) calc(${inset} * 4%) calc(${inset} * 6%) calc(${inset} * 4%) round calc(${inset} * 40px))`;
-  const imageY = useTransform(scrollYProgress, [0, 1], ['0%', '18%']);
-  const imageScale = useTransform(scrollYProgress, [0, 1], [1.08, 1.18]);
-  const textY = useTransform(scrollYProgress, [0, 1], ['0%', '-40%']);
-  const textOpacity = useTransform(scrollYProgress, [0, 0.55], [1, 0]);
+  const hasFilters = Boolean(query || activeCategory || budgetFilter);
+  // The gems strip belongs to "All"; a chosen category goes straight to its places
+  const showStrip = isAll && !query && !budgetFilter && !isLoading && strip.items.length >= 3;
 
   const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 
   return (
-    <div className="flex flex-col w-full bg-sand min-h-screen">
-      {/* ── Hero ── */}
-      <section ref={heroRef} className="relative h-[100svh] min-h-[640px] max-h-[980px] bg-sand">
-        <motion.div className="absolute inset-0 overflow-hidden bg-night grain" style={reduced ? undefined : { clipPath }}>
-          <motion.img
-            {...photoProps('hampi')}
-            fetchPriority="high"
-            decoding="async"
-            style={reduced ? undefined : { y: imageY, scale: imageScale }}
-            className="absolute inset-0 w-full h-full object-cover object-[center_60%]"
-          />
-          <div className="absolute inset-0 hero-scrim" />
-        </motion.div>
-
-        <motion.div
-          style={reduced ? undefined : { y: textY, opacity: textOpacity }}
-          className="on-photo relative z-10 h-full max-w-7xl mx-auto px-page flex flex-col justify-end pb-16 sm:pb-20"
-        >
-          <SplitHeading
-            as="h1"
-            onMount
-            delay={0.1}
-            className="text-display text-sand max-w-4xl"
-            style={{ fontSize: 'clamp(3rem, 8vw, 7.25rem)' }}
-            accentClassName="italic font-medium text-[#F4B08A]"
-            parts={[{ text: 'Find your next' }, { text: 'weekend.', accent: true }]}
-          />
-
-          <p className="text-[#E4E8E5] text-lg sm:text-xl max-w-xl mt-6 leading-relaxed animate-fade-up delay-400">
-            Admin-verified treks, temples, cafés and viewpoints. Most of them are a single morning's drive away.
-          </p>
+    <div className="explore-theme flex flex-col w-full min-h-screen" data-dark={theme.dark ? 'true' : 'false'} style={themeStyle(theme)}>
+      {/* ── Header: a headline that names the mood, and search ── */}
+      <section className="max-w-7xl mx-auto w-full px-page pt-32 sm:pt-36 pb-8 sm:pb-10">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 lg:gap-12">
+          <h1 className="text-display text-ink" style={{ fontSize: 'clamp(2.6rem, 6vw, 5.25rem)' }}>
+            Find your next{' '}
+            {/* The last word follows the hovered (or chosen) category */}
+            <span className="relative inline-grid align-baseline">
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={theme.word}
+                  className="italic font-medium text-accent [grid-area:1/1] whitespace-nowrap"
+                  initial={reduced ? false : { opacity: 0, y: '0.4em' }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduced ? undefined : { opacity: 0, y: '-0.4em' }}
+                  transition={{ duration: 0.45, ease: EASE }}
+                >
+                  {theme.word}.
+                </motion.span>
+              </AnimatePresence>
+            </span>
+          </h1>
 
           <form
             onSubmit={(e) => {
               e.preventDefault();
               scrollToResults();
             }}
-            className="search-bar flex items-center gap-3 pl-5 pr-2 py-2 mt-9 max-w-2xl animate-fade-up delay-500"
+            className="search-bar flex items-center gap-3 pl-5 pr-2 py-2 w-full lg:max-w-md shrink-0"
             role="search"
           >
-            <Search className="w-5 h-5 text-ink/60 shrink-0" />
+            <Search className="w-5 h-5 text-muted shrink-0" />
             <input
               id="explore-search"
               type="text"
-              placeholder="Search trails, temples, waterfalls, cafés…"
+              placeholder="Search trails, temples, cafés…"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
-              className="flex-1 min-w-0 bg-transparent text-ink placeholder:text-muted text-[15px] font-medium py-2 focus:outline-none"
+              className="flex-1 min-w-0 bg-transparent text-ink placeholder:text-muted text-base font-medium py-2 focus:outline-none"
               aria-label="Search places"
             />
             {searchText && (
@@ -278,38 +267,56 @@ export const ExplorePage = () => {
               Search
             </button>
           </form>
-
-          <div className="flex flex-wrap items-end justify-between gap-6 mt-10 animate-fade-up delay-600">
-            <dl className="flex gap-8 sm:gap-12 text-sand">
-              {[
-                { n: places.length, l: 'Verified places' },
-                hiddenGems.length ? { n: hiddenGems.length, l: 'Hidden gems' } : { n: freeCount, l: 'Free to visit' },
-                { n: categoryCount, l: 'Categories' },
-              ].map((s) => (
-                <div key={s.l}>
-                  <dd className="font-display text-3xl sm:text-4xl leading-none">{isLoading ? '—' : <Counter value={s.n} />}</dd>
-                  <dt className="text-label text-sand/65 mt-2">{s.l}</dt>
-                </div>
-              ))}
-            </dl>
-            <button onClick={scrollToResults} className="hidden sm:flex items-center gap-3 text-sand/80 hover:text-white text-sm font-semibold group">
-              <span className="relative w-px h-10 bg-white/25 overflow-hidden">
-                <span className="absolute inset-x-0 top-0 h-1/2 bg-white animate-scroll-cue" />
-              </span>
-              Scroll to browse
-              <ArrowDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
-            </button>
-          </div>
-        </motion.div>
+        </div>
+        {landing && (
+          <p className="text-body text-base sm:text-lg mt-4 max-w-xl">
+            Pick a mood to begin. {places.length > 0 && `${places.length} verified places around Bengaluru, sorted by what you're in the mood for.`}
+          </p>
+        )}
       </section>
 
+      {landing ? (
+        /* ── The picker: one disc per category ── */
+        <section className="max-w-[96rem] mx-auto w-full px-3 sm:px-page pb-24">
+          {isLoading ? (
+            <div className="skeleton rounded-[28px] h-[clamp(520px,74vh,760px)]" />
+          ) : (
+            <CategoryDiscs places={places} active={hovered} onActive={setHovered} onSelect={pickCategory} />
+          )}
+        </section>
+      ) : (
+        /* ── The chosen category, in its own colours ── */
+        <section className="max-w-7xl mx-auto w-full px-page">
+          <Reveal className="relative overflow-hidden rounded-[32px] min-h-[260px] sm:min-h-[320px] flex items-end bg-stone">
+            <img src={bannerPhoto} alt="" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/10" />
+            <div className="relative z-10 w-full p-7 sm:p-10 flex flex-col sm:flex-row sm:items-end justify-between gap-5 text-white">
+              <div>
+                <p className="text-label text-white/75 mb-2">
+                  {query && !activeCategory ? 'Search' : `${categoryTotal} ${categoryTotal === 1 ? 'place' : 'places'}`}
+                </p>
+                <h2 className="text-display text-white leading-[0.95]" style={{ fontSize: 'clamp(2.25rem, 5vw, 4.25rem)' }}>
+                  {activeCategory || (query ? `“${query}”` : 'All places')}
+                </h2>
+              </div>
+              <button onClick={clearAll} className="inline-flex items-center gap-2 self-start sm:self-auto rounded-full bg-white text-black text-sm font-bold px-5 py-3 hover:-translate-x-0.5 transition-transform">
+                <ArrowLeft className="w-4 h-4" /> All categories
+              </button>
+            </div>
+          </Reveal>
+        </section>
+      )}
+
+      {/* Everything below opens once a category (or All, or a search) is chosen */}
+      {!landing && (
+        <>
       {/* ── Sticky filter bar ── */}
       <div ref={filterBarRef} className="sticky z-30 top-[6.75rem] mt-2">
         <div className="sticky-shelf" data-on={filterBarStuck} aria-hidden />
         <div className="max-w-7xl mx-auto px-3 sm:px-page">
           <div className="glass rounded-full card-shadow flex items-center gap-2 pl-2 pr-2 py-2">
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-1 min-w-0" data-lenis-prevent-horizontal>
-              <Chip group="cat" active={categoryFilter === ''} onClick={() => updateParam('category', '')}>
+              <Chip group="cat" active={isAll} onClick={() => updateParam('category', ALL_KEY)}>
                 All
               </Chip>
               {PLACE_CATEGORIES.map((cat) => {
@@ -318,8 +325,8 @@ export const ExplorePage = () => {
                   <Chip
                     key={cat}
                     group="cat"
-                    active={categoryFilter === cat}
-                    onClick={() => updateParam('category', cat === categoryFilter ? '' : cat)}
+                    active={activeCategory === cat}
+                    onClick={() => updateParam('category', cat === activeCategory ? ALL_KEY : cat)}
                   >
                     <Icon className="w-3.5 h-3.5" /> {cat}
                   </Chip>
@@ -364,10 +371,10 @@ export const ExplorePage = () => {
       )}
 
       {/* ── Results ── */}
-      <section ref={resultsRef} className="max-w-7xl mx-auto w-full px-page pt-20 pb-28 flex-grow scroll-mt-40">
+      <section ref={resultsRef} className="max-w-7xl mx-auto w-full px-page pt-14 pb-28 flex-grow scroll-mt-40">
         <Reveal className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-12">
           <div>
-            <p className="section-label mb-4">{categoryFilter || (query ? 'Search results' : 'All places')}</p>
+            <p className="section-label mb-4">{activeCategory || (query ? 'Search results' : 'All places')}</p>
             <h2 className="text-display text-ink" style={{ fontSize: 'clamp(2rem, 4vw, 3.25rem)' }}>
               {isLoading ? (
                 'Loading places…'
@@ -418,7 +425,7 @@ export const ExplorePage = () => {
               {hiddenByFilters > 0 ? (
                 <>
                   <p className="section-label mb-4">Almost</p>
-                  <h3 className="font-display text-3xl text-ink mb-3">Not in {categoryFilter || 'this budget'}</h3>
+                  <h3 className="font-display text-3xl text-ink mb-3">Not in {activeCategory || 'this budget'}</h3>
                   <p className="text-muted mb-8 max-w-sm">
                     We found {hiddenByFilters} {hiddenByFilters === 1 ? 'place' : 'places'} for “{query}” outside your current filters.
                   </p>
@@ -491,9 +498,12 @@ export const ExplorePage = () => {
         )}
       </section>
 
+        </>
+      )}
+
       {/* ── Closing call to contribute ── */}
       <section className="max-w-7xl mx-auto w-full px-page pb-28">
-        <Reveal className="relative overflow-hidden rounded-[32px] bg-night min-h-[360px] flex items-end grain">
+        <Reveal className="contribute-banner relative overflow-hidden rounded-[32px] bg-night min-h-[360px] flex items-end grain">
           <img {...photoProps('coorgFalls', '(min-width: 1024px) 80vw, 100vw')} loading="lazy" className="absolute inset-0 w-full h-full object-cover opacity-70" />
           <div className="absolute inset-0 bg-gradient-to-r from-night via-night/70 to-transparent" />
           <div className="on-photo relative z-10 p-8 sm:p-14 max-w-2xl">

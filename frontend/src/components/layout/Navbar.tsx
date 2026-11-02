@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
@@ -17,13 +17,17 @@ import {
   X,
   Plus,
   ArrowUpRight,
+  Compass,
+  Plane,
+  Users,
+  MapPin,
 } from 'lucide-react';
+import { LiquidNavbar, type LiquidNavItem, type NimbusFx } from '../ui/liquid-glass-navbar';
 import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
 import { notificationsApi } from '../../api/client';
 import type { AppNotification } from '../../types';
 import { hasPhotoHero } from '../../utils/routes';
-import { ITINERARIES_ADMIN_ONLY } from '../../utils/features';
 import { setScrollLocked } from '../../hooks/useLenis';
 import { NavRoad, LOGO_HEIGHT } from './NavRoad';
 
@@ -99,10 +103,23 @@ export const Navbar = () => {
 
   const navLinks = [
     { name: 'Explore', path: '/explore' },
-    ...(isAdmin || !ITINERARIES_ADMIN_ONLY ? [{ name: 'Itineraries', path: '/itineraries' }] : []),
+    { name: 'Itineraries', path: '/itineraries' },
     { name: 'Groups', path: '/groups' },
     { name: 'Submit a place', path: '/submit' },
   ];
+
+  // Each link plays its own little scene when tapped; -1 (home, profile…) leaves the drop parked out of sight
+  const NAV_ICONS: Record<string, { icon: typeof Compass; fx: NimbusFx }> = {
+    '/explore': { icon: Compass, fx: 'spin' },
+    '/itineraries': { icon: Plane, fx: 'plane' },
+    '/groups': { icon: Users, fx: 'wave' },
+    '/submit': { icon: MapPin, fx: 'drop' },
+  };
+  const liquidItems: LiquidNavItem[] = navLinks.map((link) => {
+    const { icon: Icon, fx } = NAV_ICONS[link.path];
+    return { label: link.name, href: link.path, fx, icon: <Icon size={18} strokeWidth={1.8} aria-hidden /> };
+  });
+  const activeIndex = navLinks.findIndex((link) => location.pathname.startsWith(link.path));
 
   // Fetch notifications from backend
   const fetchNotifications = useCallback(async () => {
@@ -324,29 +341,15 @@ export const Navbar = () => {
           </Link>
 
           {/* Desktop links with a sliding underline */}
-          <div className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => {
-              const isActive = location.pathname.startsWith(link.path);
-              return (
-                <Link
-                  key={link.name}
-                  to={link.path}
-                  className={cn(
-                    'relative px-4 py-2 text-[13px] font-semibold tracking-wide transition-colors',
-                    onPhoto ? (isActive ? 'text-white' : 'text-sand/80 hover:text-white') : isActive ? 'text-ink' : 'text-body hover:text-ink'
-                  )}
-                >
-                  {link.name}
-                  {isActive && (
-                    <motion.span
-                      layoutId="nav-underline"
-                      className="absolute left-4 right-4 -bottom-0.5 h-[2px] rounded-full bg-accent"
-                      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                    />
-                  )}
-                </Link>
-              );
-            })}
+          {/* Desktop links: a pill of water whose drop slides to the page you're on */}
+          <div className="hidden md:block">
+            <LiquidNavbar
+              items={liquidItems}
+              active={activeIndex}
+              tone={onPhoto ? 'dark' : 'light'}
+              onChange={(_, item) => item.href && item.href !== location.pathname && navigate(item.href)}
+              style={{ '--n-item-h': '36px', '--n-item-px': '14px', '--n-item-fs': '13px', padding: 6 } as CSSProperties}
+            />
           </div>
 
           <div ref={desktopRightRef} className="hidden md:flex items-center gap-1.5">

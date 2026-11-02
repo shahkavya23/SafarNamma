@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, MapPin, Sparkles, Star } from 'lucide-react';
+import { ArrowUpRight, MapPin, Sparkles, Star, Users } from 'lucide-react';
 import { fallbackPhoto, optimizeImageUrl, photoSrc } from '../../utils/images';
 import { formatBudget, shortLocation } from '../../utils/format';
 
@@ -31,9 +31,28 @@ interface PlaceCardProps {
   to?: string | null;
   /** Override the price line (e.g. a placeholder in a preview). */
   priceLabel?: string;
+  /** Upcoming trips heading here; shown on the photo when above zero. */
+  groupCount?: number;
 }
 
-export const PlaceCard: React.FC<PlaceCardProps> = ({ place, index = 0, visible, to, priceLabel }) => {
+/* Tilt the card a little towards the mouse and move the warm glow under it (mouse only; touch stays still) */
+const tilt = (e: React.PointerEvent<HTMLElement>) => {
+  if (e.pointerType !== 'mouse') return;
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width;
+  const y = (e.clientY - r.top) / r.height;
+  el.style.setProperty('--tilt-x', `${(0.5 - y) * 6}deg`);
+  el.style.setProperty('--tilt-y', `${(x - 0.5) * 6}deg`);
+  el.style.setProperty('--glow-x', `${x * 100}%`);
+  el.style.setProperty('--glow-y', `${y * 100}%`);
+};
+const untilt = (e: React.PointerEvent<HTMLElement>) => {
+  e.currentTarget.style.setProperty('--tilt-x', '0deg');
+  e.currentTarget.style.setProperty('--tilt-y', '0deg');
+};
+
+export const PlaceCard: React.FC<PlaceCardProps> = ({ place, index = 0, visible, to, priceLabel, groupCount = 0 }) => {
   const revealClass = visible === undefined ? '' : `reveal ${visible ? 'visible' : ''}`;
   const fallback = fallbackPhoto(place.id);
   const href = to === undefined ? `/places/${place.id || place.slug}` : to;
@@ -42,6 +61,7 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, index = 0, visible,
 
   const body = (
     <>
+      <span aria-hidden className="place-card-glow" />
       {/* Photo */}
       <div className="relative aspect-[4/3] overflow-hidden bg-stone">
         <img
@@ -70,6 +90,12 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, index = 0, visible,
         {rating && (
           <span className="absolute bottom-3 left-3 badge glass-dark">
             <Star className="w-3 h-3 fill-[#F4C56A] text-[#F4C56A]" /> {rating.toFixed(1)}
+          </span>
+        )}
+
+        {groupCount > 0 && (
+          <span className="absolute bottom-3 right-3 badge bg-accent text-white">
+            <Users className="w-3 h-3" /> {groupCount} {groupCount === 1 ? 'group' : 'groups'} going
           </span>
         )}
       </div>
@@ -112,14 +138,14 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, index = 0, visible,
 
   if (href === null) {
     return (
-      <div className={className} style={style}>
+      <div className={className} style={style} onPointerMove={tilt} onPointerLeave={untilt}>
         {body}
       </div>
     );
   }
 
   return (
-    <Link to={href} className={className} style={style}>
+    <Link to={href} className={className} style={style} onPointerMove={tilt} onPointerLeave={untilt}>
       {body}
     </Link>
   );

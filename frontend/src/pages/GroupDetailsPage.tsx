@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   MapPin,
   CalendarDays,
@@ -8,33 +8,44 @@ import {
   Sparkles,
   ShieldAlert,
   CheckCircle,
-  MessageCircle,
-  ExternalLink,
   Clock,
   UserCheck,
   XCircle,
-  Send,
   Trash2,
   AlertCircle,
   ArrowLeft,
-  ArrowRight,
   Crown,
   Lock,
-  PartyPopper,
   Route,
   Edit3,
   Search,
   Hourglass,
   Wallet,
+  Loader2,
 } from 'lucide-react';
 import type { Group, GroupRequest, Place } from '../types';
 import { groupsApi, placesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { DetailHero, FactsCard } from '../components/detail/DetailHero';
+import { DetailHero, FactsCard, type Fact } from '../components/detail/DetailHero';
 import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal } from '../components/motion/Reveal';
 import { fallbackPhoto } from '../utils/images';
-import { groupDestination, isPastTrip, isStoryUnlocked, routeStops, seatsLeft, storyUnlockTime, isTripEditable, editWindowLabel, timeToDeparture } from '../utils/groups';
+import {
+  calendarUrl,
+  editWindowLabel,
+  groupDestination,
+  isPastTrip,
+  isStoryUnlocked,
+  isTripEditable,
+  meetingMapUrl,
+  msToDeparture,
+  routeStops,
+  seatsLeft,
+  storyUnlockTime,
+  timeToDeparture,
+} from '../utils/groups';
+import { TripLoadingScreen } from '../components/groups/TripLoadingTips';
+import { TRIP_PHOTO, type TripPreview } from '../utils/tripTransition';
 import { EditGroupModal } from '../components/groups/EditGroupModal';
 import { CrewListModal } from '../components/groups/CrewListModal';
 import { ShareTrip } from '../components/groups/ShareTrip';
@@ -42,6 +53,8 @@ import { TripJourney } from '../components/groups/TripJourney';
 import { DestinationFeature } from '../components/groups/DestinationFeature';
 import { JoinSteps } from '../components/groups/JoinSteps';
 import { SeatsRing } from '../components/groups/SeatsRing';
+import { TripHeroPanel, TripPrimaryAction } from '../components/groups/TripHeroPanel';
+import { TripSectionNav, type TripSection } from '../components/groups/TripSectionNav';
 import { Chip } from '../components/ui/Chip';
 import { cn } from '../utils/cn';
 
@@ -65,13 +78,78 @@ const SectionHead = ({ label, parts }: { label: string; parts: { text: string; a
   </>
 );
 
+/* Photo, title, place and host. Also drawn straight from the trip card while the full trip loads,
+   so the card's photo has a hero to grow into (utils/tripTransition). */
+const TripHero = ({ group, place, actions }: { group: Group; place: Place | null; actions?: ReactNode }) => {
+  const past = isPastTrip(group);
+  const left = seatsLeft(group);
+  const leavesIn = timeToDeparture(group);
+  const destination = groupDestination(group, place ?? undefined);
+  const stops = routeStops(group.custom_destination);
+  const fallback = fallbackPhoto(String(group.id) + destination);
+  const photos = [place?.image_url, ...(place?.gallery_images ?? [])].filter((p): p is string => Boolean(p));
+
+  const statusBadge = past ? (
+    <span className="badge glass-dark">Completed</span>
+  ) : group.status === 'open' && left > 0 ? (
+    <span className="badge bg-[#2F7D5B] text-white">Recruiting · {left} {left === 1 ? 'seat' : 'seats'} left</span>
+  ) : (
+    <span className="badge badge-danger">Group full</span>
+  );
+
+  return (
+    <DetailHero
+      compact
+      photos={photos}
+      fallback={fallback}
+      transitionName={TRIP_PHOTO}
+      eyebrow={
+        <div className="flex flex-wrap items-center gap-3">
+          <Link to="/groups" className="inline-flex items-center gap-1.5 text-label text-sand/70 hover:text-white transition-colors">
+            <ArrowLeft className="w-3.5 h-3.5" /> All trips
+          </Link>
+          {statusBadge}
+          {leavesIn && (
+            <span className="badge glass-dark">
+              <Clock className="w-3 h-3" /> Leaves in {leavesIn}
+            </span>
+          )}
+        </div>
+      }
+      title={<SplitHeading as="h1" onMount delay={0.1} className="text-display text-sand" style={{ fontSize: 'clamp(2.5rem, 5vw, 4.75rem)' }} parts={[{ text: group.title }]} />}
+      meta={
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[#D8DEDA]">
+          <span className="flex items-center gap-2">
+            {stops.length ? <Route className="w-4 h-4 text-[#F4B08A]" /> : <MapPin className="w-4 h-4 text-[#F4B08A]" />}
+            {place && !stops.length ? (
+              <Link to={`/places/${place.id}`} className="text-sand font-semibold hover:underline underline-offset-4">
+                {destination}
+              </Link>
+            ) : (
+              <span className="text-sand font-semibold">{stops.length ? `${stops.length}-stop route` : destination}</span>
+            )}
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="w-7 h-7 rounded-full bg-[#F4B08A] text-night text-xs font-bold flex items-center justify-center">{group.organizer_name?.charAt(0).toUpperCase() || 'H'}</span>
+            Hosted by <span className="text-sand font-semibold">{group.organizer_name}</span>
+          </span>
+        </div>
+      }
+      actions={actions ?? (!past && <ShareTrip group={group} destination={destination} />)}
+    />
+  );
+};
+
 export const GroupDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // The card that opened this page hands over its trip, so the hero can draw before the fetch returns
+  const handoff = useLocation().state as TripPreview | null;
+  const preview = handoff?.group && String(handoff.group.id) === id ? handoff : null;
   const { user, isAuthenticated } = useAuth();
 
   const [group, setGroup] = useState<Group | null>(null);
-  const [place, setPlace] = useState<Place | null>(null);
+  const [place, setPlace] = useState<Place | null>(preview?.place ?? null);
   const [requests, setRequests] = useState<GroupRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -85,14 +163,18 @@ export const GroupDetailsPage = () => {
   const [isCrewOpen, setIsCrewOpen] = useState(false);
   const [requestQuery, setRequestQuery] = useState('');
   const [requestFilter, setRequestFilter] = useState<RequestFilter>('all');
+  // Requests being saved right now (id → the answer on its way), and the one that last failed
+  const [savingRequests, setSavingRequests] = useState<Record<number, 'approved' | 'rejected'>>({});
+  const [requestError, setRequestError] = useState<{ id: number; message: string } | null>(null);
   const reduced = useReducedMotion();
 
-  // Re-render every minute so the "leaves in" countdown stays current
-  const [, setMinute] = useState(0);
+  // Re-render so the "leaves in" countdown stays current: every minute, every second in the last hour
+  const [, setTick] = useState(0);
+  const finalHour = group ? msToDeparture(group) > 0 && msToDeparture(group) < 3_600_000 : false;
   useEffect(() => {
-    const timer = setInterval(() => setMinute((n) => n + 1), 60_000);
+    const timer = setInterval(() => setTick((n) => n + 1), finalHour ? 1000 : 60_000);
     return () => clearInterval(timer);
-  }, []);
+  }, [finalHour]);
 
   const fetchDetails = async () => {
     if (!id) return;
@@ -102,11 +184,11 @@ export const GroupDetailsPage = () => {
       if (groupData) {
         setGroup(groupData);
 
-        // Fetch corresponding place info
+        // The place loads alongside the rest instead of holding the page back; the card usually
+        // hands it over already, in which case there is nothing to fetch
         const destId = groupData.destination_id || (groupData as any).place_id;
-        if (destId) {
-          const placeData = await placesApi.getPlaceById(destId.toString());
-          if (placeData) setPlace(placeData);
+        if (destId && String(place?.id) !== String(destId)) {
+          placesApi.getPlaceById(destId.toString()).then((p) => p && setPlace(p)).catch(() => {});
         }
 
         // Check if current user is organizer
@@ -168,18 +250,35 @@ export const GroupDetailsPage = () => {
 
   // Organizer approves or rejects a request
   const handleUpdateRequestStatus = async (requestId: number, newStatus: 'approved' | 'rejected') => {
-    if (!user || !group) return;
+    if (!user || !group || savingRequests[requestId]) return;
+    setSavingRequests((saving) => ({ ...saving, [requestId]: newStatus }));
+    setRequestError(null);
     try {
       const success = await groupsApi.updateRequestStatus(requestId, newStatus, user.email);
-      if (success) {
-        // Re-fetch requests and group to refresh member count and status
-        await fetchDetails();
-      } else {
-        alert('Failed to update status.');
-      }
+      if (!success) throw new Error();
+      // Show the answer on the row straight away; the seat count and the rest catch up behind it
+      setRequests((list) => list.map((r) => (r.id === requestId ? { ...r, status: newStatus } : r)));
+      fetchDetails();
     } catch (err) {
       console.error('Failed to update status', err);
+      setRequestError({ id: requestId, message: `Could not ${newStatus === 'approved' ? 'approve' : 'decline'} this request. Please try again.` });
+    } finally {
+      setSavingRequests((saving) => {
+        const rest = { ...saving };
+        delete rest[requestId];
+        return rest;
+      });
     }
+  };
+
+  // Host jumps from the hero to the join requests; the card rings once so the eye lands on it
+  const openRequests = () => {
+    const el = document.getElementById('trip-requests');
+    if (!el) return;
+    el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+    el.classList.remove('requests-flash');
+    void el.offsetWidth;
+    el.classList.add('requests-flash');
   };
 
   // Organizer cancels & deletes the travel group
@@ -204,22 +303,8 @@ export const GroupDetailsPage = () => {
   if (isLoading) {
     return (
       <div className="w-full bg-sand min-h-screen">
-        <div className="bg-night h-[480px]" />
-        <div className="max-w-7xl mx-auto px-page -mt-24 space-y-12">
-          <div className="skeleton h-24 w-full rounded-[28px]" />
-          <div className="grid lg:grid-cols-[1fr_360px] gap-12">
-            <div className="space-y-4">
-              <div className="skeleton h-4 w-40" />
-              <div className="skeleton h-20 w-full rounded-[22px]" />
-              <div className="skeleton h-20 w-full rounded-[22px]" />
-              <div className="skeleton h-20 w-full rounded-[22px]" />
-            </div>
-            <div className="space-y-5">
-              <div className="skeleton h-72 rounded-[26px]" />
-              <div className="skeleton h-36 rounded-[22px]" />
-            </div>
-          </div>
-        </div>
+        {preview ? <TripHero group={preview.group} place={preview.place ?? null} /> : <div className="bg-night h-[480px]" />}
+        <TripLoadingScreen />
       </div>
     );
   }
@@ -241,8 +326,6 @@ export const GroupDetailsPage = () => {
 
   const isOrganizer = user && user.email.toLowerCase() === group.organizer_email.toLowerCase();
   const isApprovedMember = !isOrganizer && (myRequestStatus === 'approved' || Boolean(group.chat_link));
-  const isWhatsApp = group.chat_link?.includes('whatsapp.com') || group.chat_link?.includes('wa.me');
-  const isTelegram = group.chat_link?.includes('t.me') || group.chat_link?.includes('telegram.me');
 
   const date = new Date(group.trip_date);
   const left = seatsLeft(group);
@@ -252,8 +335,6 @@ export const GroupDetailsPage = () => {
   const leavesIn = timeToDeparture(group);
   const destination = groupDestination(group, place ?? undefined);
   const stops = routeStops(group.custom_destination);
-  const fallback = fallbackPhoto(String(group.id) + destination);
-  const photos = [place?.image_url, ...(place?.gallery_images ?? [])].filter((p): p is string => Boolean(p));
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
   const requestTerm = requestQuery.trim().toLowerCase();
   const requestCount = (key: RequestFilter) => (key === 'all' ? requests.length : requests.filter((r) => r.status === key).length);
@@ -262,69 +343,109 @@ export const GroupDetailsPage = () => {
       (requestFilter === 'all' || r.status === requestFilter) &&
       (!requestTerm || r.user_name?.toLowerCase().includes(requestTerm) || r.user_email?.toLowerCase().includes(requestTerm))
   );
-  const canRequest = group.status === 'open' && !past;
 
-  const facts = [
-    { icon: CalendarDays, label: 'When', value: date.toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) },
-    { icon: MapPin, label: 'Meet at', value: group.meeting_area },
-    { icon: Hourglass, label: past ? 'Status' : 'Leaves in', value: leavesIn ?? 'Trip has left', accent: !past },
+  const msLeft = msToDeparture(group);
+  const facts: Fact[] = [
+    {
+      icon: CalendarDays,
+      label: 'When',
+      value: date.toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }),
+      ...(past ? {} : { note: 'Add to calendar', external: calendarUrl(group, destination) }),
+    },
+    { icon: MapPin, label: 'Meet at', value: group.meeting_area, note: 'Open in Maps', external: meetingMapUrl(group) },
+    {
+      icon: Hourglass,
+      label: past ? 'Status' : 'Leaves in',
+      value: <span className="tabular-nums">{timeToDeparture(group, true) ?? 'Trip has left'}</span>,
+      accent: !past,
+      status: past ? null : msLeft < 2 * 3_600_000 ? { label: 'Boarding soon', tone: 'soon' } : { label: 'On schedule', tone: 'open' },
+    },
+    {
+      icon: Users,
+      label: 'Seats',
+      value: past ? `${group.current_members} went` : left > 0 ? `${left} ${left === 1 ? 'seat' : 'seats'} open` : 'Group is full',
+      ...(group.max_members <= 10
+        ? { meter: { level: group.current_members, max: group.max_members, symbol: '●', label: `${group.current_members} of ${group.max_members} seats taken` } }
+        : { note: `${group.current_members} of ${group.max_members} going` }),
+    },
     ...(group.estimated_cost && group.estimated_cost > 0
       ? [{ icon: Wallet, label: 'Cost', value: `₹${group.estimated_cost.toLocaleString('en-IN')} per person` }]
       : []),
   ];
 
-  const statusBadge = past ? (
-    <span className="badge glass-dark">Completed</span>
-  ) : group.status === 'open' && left > 0 ? (
-    <span className="badge bg-[#2F7D5B] text-white">Recruiting · {left} {left === 1 ? 'seat' : 'seats'} left</span>
-  ) : (
-    <span className="badge badge-danger">Group full</span>
+  const primary = (variant: 'hero' | 'card' | 'bar') => (
+    <TripPrimaryAction
+      group={group}
+      isApprovedMember={isApprovedMember}
+      status={myRequestStatus}
+      isAuthenticated={isAuthenticated}
+      isSubmitting={isSubmittingRequest}
+      onRequest={handleRequestToJoin}
+      variant={variant}
+    />
   );
+
+  const sections = [
+    isOrganizer && { id: 'trip-requests', label: 'Requests', badge: pendingCount || undefined },
+    group.description?.trim() && { id: 'trip-plan', label: 'The plan' },
+    { id: 'trip-journey', label: 'Journey' },
+    place && !stops.length && { id: 'trip-place', label: 'The place' },
+    !isOrganizer && !past && { id: 'trip-joining', label: 'How to join' },
+    group.safety_notes && { id: 'trip-safety', label: 'Safety' },
+  ].filter(Boolean) as TripSection[];
 
   return (
     <div className="w-full bg-sand min-h-screen">
-      {/* ── Hero ── */}
-      <DetailHero
-        compact
-        photos={photos}
-        fallback={fallback}
-        eyebrow={
-          <div className="flex flex-wrap items-center gap-3">
-            <Link to="/groups" className="inline-flex items-center gap-1.5 text-label text-sand/70 hover:text-white transition-colors">
-              <ArrowLeft className="w-3.5 h-3.5" /> All trips
-            </Link>
-            {statusBadge}
-            {leavesIn && (
-              <span className="badge glass-dark">
-                <Clock className="w-3 h-3" /> Leaves in {leavesIn}
-              </span>
-            )}
-          </div>
+      {/* ── Hero, with the trip's key actions next to the title ── */}
+      <TripHero
+        group={group}
+        place={place}
+        actions={
+          <TripHeroPanel
+            group={group}
+            destination={destination}
+            isOrganizer={Boolean(isOrganizer)}
+            pendingCount={pendingCount}
+            onOpenRequests={openRequests}
+            onOpenCrew={() => setIsCrewOpen(true)}
+            onEdit={() => setIsEditModalOpen(true)}
+            primary={primary('hero')}
+          />
         }
-        title={<SplitHeading as="h1" onMount delay={0.1} className="text-display text-sand" style={{ fontSize: 'clamp(2.5rem, 5vw, 4.75rem)' }} parts={[{ text: group.title }]} />}
-        meta={
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[#D8DEDA]">
-            <span className="flex items-center gap-2">
-              {stops.length ? <Route className="w-4 h-4 text-[#F4B08A]" /> : <MapPin className="w-4 h-4 text-[#F4B08A]" />}
-              {place && !stops.length ? (
-                <Link to={`/places/${place.id}`} className="text-sand font-semibold hover:underline underline-offset-4">
-                  {destination}
-                </Link>
-              ) : (
-                <span className="text-sand font-semibold">{stops.length ? `${stops.length}-stop route` : destination}</span>
-              )}
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-full bg-[#F4B08A] text-night text-xs font-bold flex items-center justify-center">{group.organizer_name?.charAt(0).toUpperCase() || 'H'}</span>
-              Hosted by <span className="text-sand font-semibold">{group.organizer_name}</span>
-            </span>
-          </div>
-        }
-        actions={!past && <ShareTrip group={group} destination={destination} />}
       />
 
       {/* ── Key facts ── */}
       <FactsCard facts={facts} />
+
+      {/* ── Linked Curated Itinerary Blueprint ── */}
+      {group.itinerary_id && (
+        <div className="max-w-7xl mx-auto px-page pt-8">
+          <Link
+            to={`/itineraries/${group.itinerary_id}`}
+            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl bg-paper border border-accent/30 p-6 card-shadow-hover transition-all"
+          >
+            <div className="flex items-center gap-4">
+              <span className="w-12 h-12 rounded-2xl bg-accent-soft text-accent flex items-center justify-center shrink-0">
+                <Route className="w-6 h-6" />
+              </span>
+              <div>
+                <p className="text-[11px] font-mono uppercase tracking-wider text-accent font-semibold mb-0.5">
+                  Curated Route Blueprint Attached
+                </p>
+                <p className="font-display text-xl text-ink">
+                  Explore Full Itinerary & Interactive Map
+                </p>
+                <p className="text-muted text-xs mt-0.5">
+                  See the exact waypoint route, transit modes, and dinner spots.
+                </p>
+              </div>
+            </div>
+            <span className="btn-primary text-xs py-2.5 px-5 shrink-0 self-start sm:self-auto flex items-center gap-1.5">
+              Open Itinerary ➔
+            </span>
+          </Link>
+        </div>
+      )}
 
       {/* ── Story maker: opens for the crew 90 minutes after the start ── */}
       {(isOrganizer || isApprovedMember) && (storyReady || isSameDay(date)) && (
@@ -354,11 +475,15 @@ export const GroupDetailsPage = () => {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-page pt-14 pb-24 grid lg:grid-cols-[minmax(0,1fr)_360px] gap-12 lg:gap-16">
+      {/* ── Section tabs, stuck under the navbar ── */}
+      <TripSectionNav sections={sections} />
+
+      <div className="max-w-7xl mx-auto px-page pt-10 pb-24 grid lg:grid-cols-[minmax(0,1fr)_360px] gap-12 lg:gap-16">
         <div className="min-w-0 space-y-16">
           {/* ═══ Organizer: join requests ═══ */}
           {isOrganizer && (
-            <Reveal as="section" className="card card-shadow p-6 sm:p-8">
+            <section id="trip-requests" className="scroll-mt-44">
+            <Reveal className="card card-shadow p-6 sm:p-8">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
                 <div className="flex items-center gap-3">
                   <span className="w-11 h-11 rounded-2xl bg-ink text-sand flex items-center justify-center">
@@ -430,13 +555,30 @@ export const GroupDetailsPage = () => {
                       </div>
 
                       {req.status === 'pending' && (
-                        <div className="flex gap-2 shrink-0">
-                          <button onClick={() => handleUpdateRequestStatus(req.id, 'approved')} className="btn-primary !py-2 !px-4 !text-xs">
-                            <CheckCircle className="w-3.5 h-3.5" /> Approve
-                          </button>
-                          <button onClick={() => handleUpdateRequestStatus(req.id, 'rejected')} className="btn-ghost !py-2 !px-4 !text-xs hover:!text-[#B42318] hover:!border-[#B42318]/40">
-                            <XCircle className="w-3.5 h-3.5" /> Decline
-                          </button>
+                        <div className="shrink-0" aria-busy={Boolean(savingRequests[req.id])}>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleUpdateRequestStatus(req.id, 'approved')}
+                              disabled={Boolean(savingRequests[req.id])}
+                              className="btn-primary !py-2 !px-4 !text-xs"
+                            >
+                              {savingRequests[req.id] === 'approved' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                              {savingRequests[req.id] === 'approved' ? 'Approving…' : 'Approve'}
+                            </button>
+                            <button
+                              onClick={() => handleUpdateRequestStatus(req.id, 'rejected')}
+                              disabled={Boolean(savingRequests[req.id])}
+                              className="btn-ghost !py-2 !px-4 !text-xs hover:!text-[#B42318] hover:!border-[#B42318]/40 disabled:opacity-55 disabled:cursor-not-allowed"
+                            >
+                              {savingRequests[req.id] === 'rejected' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                              {savingRequests[req.id] === 'rejected' ? 'Declining…' : 'Decline'}
+                            </button>
+                          </div>
+                          {requestError?.id === req.id && (
+                            <p className="text-xs font-semibold text-[#8A1C12] mt-2" role="alert">
+                              {requestError.message}
+                            </p>
+                          )}
                         </div>
                       )}
                     </motion.li>
@@ -445,11 +587,12 @@ export const GroupDetailsPage = () => {
                 </ul>
               )}
             </Reveal>
+            </section>
           )}
 
           {/* The plan (optional when hosting) */}
           {group.description?.trim() && (
-            <section>
+            <section id="trip-plan" className="scroll-mt-44">
               <SectionHead label="The plan" parts={[{ text: "Here's how the" }, { text: 'day goes.', accent: true }]} />
               <Reveal delay={0.1}>
                 <p className="text-body text-lg leading-[1.8] whitespace-pre-line max-w-[64ch]">{group.description}</p>
@@ -458,7 +601,7 @@ export const GroupDetailsPage = () => {
           )}
 
           {/* The day, start to finish */}
-          <section>
+          <section id="trip-journey" className="scroll-mt-44">
             <SectionHead
               label={stops.length > 1 ? `The journey · ${stops.length} stops` : 'The journey'}
               parts={[{ text: 'From meet-up to' }, { text: 'memories.', accent: true }]}
@@ -468,7 +611,7 @@ export const GroupDetailsPage = () => {
 
           {/* Destination */}
           {place && !stops.length && (
-            <section>
+            <section id="trip-place" className="scroll-mt-44">
               <SectionHead label="Where you're headed" parts={[{ text: 'Get to know' }, { text: 'the place.', accent: true }]} />
               <Reveal>
                 <DestinationFeature place={place} />
@@ -478,7 +621,7 @@ export const GroupDetailsPage = () => {
 
           {/* How joining works, with the visitor's own progress */}
           {!isOrganizer && !past && (
-            <section>
+            <section id="trip-joining" className="scroll-mt-44">
               <SectionHead label="How joining works" parts={[{ text: 'Three steps to' }, { text: 'your seat.', accent: true }]} />
               <JoinSteps status={isApprovedMember ? 'approved' : myRequestStatus} />
             </section>
@@ -486,7 +629,8 @@ export const GroupDetailsPage = () => {
 
           {/* Safety */}
           {group.safety_notes && (
-            <Reveal as="section" className="rounded-[22px] bg-accent-soft/60 border border-accent/20 p-6 sm:p-7 flex gap-5">
+            <section id="trip-safety" className="scroll-mt-44">
+            <Reveal className="rounded-[22px] bg-accent-soft/60 border border-accent/20 p-6 sm:p-7 flex gap-5">
               <span className="w-12 h-12 rounded-2xl bg-paper text-accent-text flex items-center justify-center shrink-0">
                 <ShieldAlert className="w-5 h-5" />
               </span>
@@ -495,11 +639,12 @@ export const GroupDetailsPage = () => {
                 <p className="text-body leading-relaxed whitespace-pre-line">{group.safety_notes}</p>
               </div>
             </Reveal>
+            </section>
           )}
         </div>
 
         {/* ── Sticky action card ── */}
-        <aside className="lg:sticky lg:top-28 self-start space-y-5">
+        <aside className="lg:sticky lg:top-40 self-start space-y-5">
           <Reveal className="rounded-[26px] bg-paper border border-line card-shadow-hover overflow-hidden">
             {/* Ticket header */}
             <div className="bg-ink text-sand p-6 flex items-center gap-5">
@@ -525,17 +670,8 @@ export const GroupDetailsPage = () => {
               {/* Case 1: The user is the Organizer */}
               {isOrganizer ? (
                 <div className="space-y-3">
-                  <div className="rounded-2xl bg-accent-soft text-accent-text p-3.5 text-sm font-semibold flex items-center justify-center gap-2">
-                    <Crown className="w-4 h-4" /> You're hosting this trip
-                  </div>
-                  {group.chat_link && (
-                    <a href={group.chat_link} target="_blank" rel="noopener noreferrer" className="btn-primary w-full">
-                      <MessageCircle className="w-4 h-4" /> Open group chat <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-
                   {/* Organizer Edit Trip Action */}
-                  <div className="pt-2">
+                  <div>
                     <button
                       onClick={() => setIsEditModalOpen(true)}
                       className={cn(
@@ -568,51 +704,8 @@ export const GroupDetailsPage = () => {
                     <p className="text-[11px] text-muted text-center mt-3 leading-relaxed">Hosts can delete a trip 2 hours after creating it, so plans stay stable for people who joined.</p>
                   </div>
                 </div>
-              ) : isApprovedMember ? (
-                /* Case 2: Approved: reveal the WhatsApp / Telegram link */
-                <div className="space-y-3">
-                  <div className="rounded-2xl bg-[#DDEEE4] text-[#1F5C42] p-3.5 text-sm font-semibold flex items-center justify-center gap-2">
-                    <PartyPopper className="w-4 h-4" /> You're in! The host approved you.
-                  </div>
-                  {group.chat_link ? (
-                  <a
-                    href={group.chat_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={cn('btn-primary w-full', isWhatsApp && '!bg-[#1EA952] hover:!bg-[#178C44]', isTelegram && '!bg-[#0088cc] hover:!bg-[#0077b5]')}
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    {isWhatsApp ? 'Join WhatsApp group' : isTelegram ? 'Join Telegram chat' : 'Open group chat'}
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                  ) : (
-                    <p className="text-xs text-muted text-center leading-relaxed">The host hasn't added a group chat link yet. Check back soon.</p>
-                  )}
-                </div>
-              ) : myRequestStatus === 'pending' ? (
-                /* Case 3: Request pending */
-                <div className="rounded-2xl bg-accent-soft/70 text-accent-text py-4 px-4 font-semibold text-sm flex items-center justify-center gap-2">
-                  <Clock className="w-4 h-4 animate-pulse" /> Request sent · waiting for the host
-                </div>
-              ) : myRequestStatus === 'rejected' ? (
-                /* Case 4: Request declined */
-                <div className="space-y-3">
-                  <div className="rounded-2xl bg-[#FDF3F1] border border-[#F2C9C2] p-4 text-center">
-                    <p className="flex items-center justify-center gap-2 text-[#8A1C12] font-semibold text-sm">
-                      <XCircle className="w-4 h-4" /> Your request was declined
-                    </p>
-                    <p className="text-xs text-[#8A1C12]/80 mt-1.5 leading-relaxed">The host couldn't fit you on this trip. There are others to join.</p>
-                  </div>
-                  <Link to="/groups" className="btn-ghost w-full">
-                    Browse other trips <ArrowRight className="w-4 h-4" />
-                  </Link>
-                </div>
               ) : (
-                /* Case 5: Anyone else: request to join */
-                <button onClick={handleRequestToJoin} disabled={!canRequest || isSubmittingRequest} className="btn-accent w-full !py-4">
-                  <Send className="w-4 h-4" />
-                  {isSubmittingRequest ? 'Sending request…' : past ? 'This trip has ended' : group.status === 'open' ? 'Request to join' : 'Group is full'}
-                </button>
+                primary('card')
               )}
 
               {!isOrganizer && !isApprovedMember && (
@@ -636,64 +729,48 @@ export const GroupDetailsPage = () => {
                 </p>
               </div>
             </div>
+            <div className="mt-5 pt-5 border-t border-line flex items-center gap-4">
+              <span className="w-11 h-11 rounded-full bg-[#F4B08A] text-night font-bold flex items-center justify-center shrink-0">
+                {group.organizer_name?.charAt(0).toUpperCase() || 'H'}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-label text-muted mb-0.5">Your host</p>
+                <p className="font-semibold text-ink truncate">
+                  {group.organizer_name}
+                  {isOrganizer && <span className="text-muted font-normal"> · You</span>}
+                </p>
+              </div>
+              <Crown className="w-4 h-4 text-accent-text shrink-0" />
+            </div>
             {isOrganizer && (
               <button onClick={() => setIsCrewOpen(true)} className="btn-ghost w-full mt-5">
                 <Users className="w-4 h-4 text-accent" /> Crew list
               </button>
             )}
           </Reveal>
-
-          <Reveal delay={0.15} className="card p-5 flex items-center gap-4">
-            <span className="w-12 h-12 rounded-full bg-[#F4B08A] text-night font-bold flex items-center justify-center shrink-0">
-              {group.organizer_name?.charAt(0).toUpperCase() || 'H'}
-            </span>
-            <div className="min-w-0">
-              <p className="text-label text-muted mb-0.5">Your host</p>
-              <p className="font-semibold text-ink truncate">
-                {group.organizer_name}
-                {isOrganizer && <span className="text-muted font-normal"> · You</span>}
-              </p>
-            </div>
-            <Crown className="w-4 h-4 text-accent-text ml-auto shrink-0" />
-          </Reveal>
         </aside>
       </div>
 
       {/* ── Phones: the one next step, always in reach ── */}
-      {!isOrganizer && !past && (
+      {!past && (
         <>
           <div className="h-20 lg:hidden" aria-hidden />
           <motion.div
             initial={reduced ? false : { y: '100%' }}
             animate={{ y: 0 }}
             transition={{ duration: 0.7, ease: EASE, delay: 0.6 }}
-            className="lg:hidden fixed inset-x-0 bottom-0 z-40 bg-paper/95 backdrop-blur border-t border-line px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center gap-3 shadow-[0_-12px_32px_-20px_rgba(16,42,46,0.45)]"
+            className="lg:hidden fixed inset-x-0 bottom-0 z-40 bg-paper/95 border-t border-line px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center gap-3 shadow-[0_-12px_32px_-20px_rgba(16,42,46,0.45)]"
           >
             <div className="min-w-0 flex-1">
               <p className="text-label text-muted truncate">{leavesIn ? `Leaves in ${leavesIn}` : 'Leaving now'}</p>
               <p className="text-sm font-semibold text-ink truncate">{left > 0 ? `${left} ${left === 1 ? 'seat' : 'seats'} open` : 'Group is full'}</p>
             </div>
-            {isApprovedMember ? (
-              group.chat_link ? (
-                <a href={group.chat_link} target="_blank" rel="noopener noreferrer" className="btn-primary shrink-0">
-                  <MessageCircle className="w-4 h-4" /> Open chat
-                </a>
-              ) : (
-                <span className="badge badge-success shrink-0">You're in</span>
-              )
-            ) : myRequestStatus === 'pending' ? (
-              <span className="badge badge-amber shrink-0">
-                <Clock className="w-3 h-3" /> Request sent
-              </span>
-            ) : myRequestStatus === 'rejected' ? (
-              <Link to="/groups" className="btn-ghost shrink-0">
-                Other trips <ArrowRight className="w-4 h-4" />
-              </Link>
-            ) : (
-              <button onClick={handleRequestToJoin} disabled={!canRequest || isSubmittingRequest} className="btn-accent shrink-0">
-                <Send className="w-4 h-4" />
-                {isSubmittingRequest ? 'Sending…' : canRequest ? 'Request to join' : 'Group is full'}
+            {isOrganizer ? (
+              <button onClick={openRequests} className="btn-primary shrink-0">
+                <UserCheck className="w-4 h-4" /> {pendingCount ? `Review requests (${pendingCount})` : 'Requests'}
               </button>
+            ) : (
+              primary('bar')
             )}
           </motion.div>
         </>

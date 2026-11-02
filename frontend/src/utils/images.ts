@@ -91,7 +91,14 @@ export const fallbackPhoto = (seed: number | string = 0) => {
   return photoSrc(FALLBACK_ROTATION[Math.abs(n) % FALLBACK_ROTATION.length], 800);
 };
 
-export const PHOTO_CREDITS = Object.values(PHOTOS as Record<string, Photo>)
+/** Resolves true once a photo is ready to paint without a blank frame, false if it can't be loaded. */
+export const preloadImage = (src: string): Promise<boolean> => {
+  const img = new Image();
+  img.src = src;
+  return img.decode().then(() => true, () => false);
+};
+
+export const PHOTO_CREDITS =Object.values(PHOTOS as Record<string, Photo>)
   .filter((p) => p.credit)
   .map((p) => ({ place: p.place, ...p.credit! }));
 

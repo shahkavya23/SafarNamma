@@ -29,6 +29,8 @@ import { hoursMarker, hoursMode } from '../utils/hours';
 import { HoursModeToggles } from '../components/ui/Open247Toggle';
 import { Question } from '../components/ui/Question';
 import { revealProps } from '../utils/reveal';
+import { CoordinateFields, MapLinkNotice } from '../components/places/LocationFields';
+import { coordNumber, coordsError, coordsFromMapLink } from '../utils/mapLink';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -39,6 +41,8 @@ const EMPTY_FORM = {
   estimated_cost: '',
   description: '',
   map_link: '',
+  latitude: '',
+  longitude: '',
   opening_hours: '',
   closing_hours: '',
   transport_options: '',
@@ -133,9 +137,12 @@ export const SubmitPlacePage = () => {
       const link = data.map_link.trim();
       const isGoogleMaps = /^https?:\/\/(www\.)?(google\.[a-z.]+\/maps|maps\.google\.[a-z.]+|goo\.gl\/maps|maps\.app\.goo\.gl)/i.test(link);
       if (!isGoogleMaps) {
-        newErrors.map_link = 'Please provide a valid Google Maps link (e.g. https://maps.app.goo.gl/... or https://maps.google.com/...)';
+        newErrors.map_link = 'Please provide a valid Google Maps link (e.g. https://www.google.com/maps/place/...)';
       }
     }
+
+    const coordinateProblem = coordsError(data.latitude, data.longitude);
+    if (coordinateProblem) newErrors.coordinates = coordinateProblem;
 
     return newErrors;
   };
@@ -151,7 +158,7 @@ export const SubmitPlacePage = () => {
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       setRevealed(REQUIRED_STEPS.length);
-      if (validationErrors.map_link) setOpenExtra('map');
+      if (validationErrors.map_link || validationErrors.coordinates) setOpenExtra('map');
       scrollToFormTop();
       return;
     }
@@ -167,6 +174,8 @@ export const SubmitPlacePage = () => {
         gallery_images: galleryUrls,
         menu_images: form.category === 'Cafes & Restaurants' ? menuUrls : [],
         map_link: form.map_link,
+        latitude: coordNumber(form.latitude),
+        longitude: coordNumber(form.longitude),
         category: form.category,
         opening_hours: form.opening_hours.trim() || null,
         closing_hours: form.closing_hours.trim() || null,
@@ -553,17 +562,34 @@ export const SubmitPlacePage = () => {
                                             id="map_link"
                                             type="url"
                                             value={form.map_link}
-                                            onChange={(e) => set('map_link', e.target.value)}
+                                            onChange={(e) => {
+                                              const link = e.target.value;
+                                              const coords = coordsFromMapLink(link);
+                                              setForm((f) => ({
+                                                ...f,
+                                                map_link: link,
+                                                ...(coords ? { latitude: String(coords[0]), longitude: String(coords[1]) } : {}),
+                                              }));
+                                            }}
                                             className={cn('field', errors.map_link && 'field-error')}
-                                            placeholder="https://maps.app.goo.gl/…"
+                                            placeholder="https://www.google.com/maps/place/…"
                                             aria-label="Google Maps link"
                                             aria-invalid={Boolean(errors.map_link)}
                                           />
                                           {errors.map_link ? (
                                             <p className="text-sm text-[#B42318] mt-2">{errors.map_link}</p>
                                           ) : (
-                                            <p className="field-hint mt-2">Google Maps links only. Open the place in Maps, tap Share, and paste the link here.</p>
+                                            <p className="field-hint mt-2">Google Maps links only. Open the place in Maps in a browser and copy the full address-bar URL.</p>
                                           )}
+                                          <MapLinkNotice mapLink={form.map_link} latitude={form.latitude} longitude={form.longitude} />
+                                          <CoordinateFields
+                                            latitude={form.latitude}
+                                            longitude={form.longitude}
+                                            onChange={(latitude, longitude) => setForm((f) => ({ ...f, latitude, longitude }))}
+                                            error={errors.coordinates}
+                                            labelClassName="field-label"
+                                            inputClassName={cn('field', errors.coordinates && 'field-error')}
+                                          />
                                         </>
                                       )}
 

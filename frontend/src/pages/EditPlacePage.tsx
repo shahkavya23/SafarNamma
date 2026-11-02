@@ -8,6 +8,8 @@ import { ImageUploader } from '../components/ImageUploader';
 import { MenuUploader } from '../components/MenuUploader';
 import { hoursMarker, hoursMode, type HoursMode } from '../utils/hours';
 import { HoursModeToggles } from '../components/ui/Open247Toggle';
+import { CoordinateFields, MapLinkNotice } from '../components/places/LocationFields';
+import { coordNumber, coordsError, coordsFromMapLink } from '../utils/mapLink';
 
 export const EditPlacePage = () => {
   const { id } = useParams<{ id: string }>();
@@ -46,6 +48,9 @@ export const EditPlacePage = () => {
   const [menuUrls, setMenuUrls] = useState<string[]>([]);
   const [category, setCategory] = useState<string>('');
   const [timingMode, setTimingMode] = useState<HoursMode>('times');
+  const [mapLink, setMapLink] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
 
   useEffect(() => {
     const fetchPlace = async () => {
@@ -59,6 +64,9 @@ export const EditPlacePage = () => {
           setMenuUrls(data.menu_images || []);
           setCategory(data.category || '');
           setTimingMode(hoursMode(data.opening_hours, data.closing_hours));
+          setMapLink(data.map_link || '');
+          setLatitude(data.latitude != null ? String(data.latitude) : '');
+          setLongitude(data.longitude != null ? String(data.longitude) : '');
         }
       } catch (err) {
         console.error(err);
@@ -75,6 +83,8 @@ export const EditPlacePage = () => {
     const data = Object.fromEntries(formData.entries()) as Record<string, string>;
 
     const validationErrors = validateForm(data);
+    const coordinateProblem = coordsError(latitude, longitude);
+    if (coordinateProblem) validationErrors.coordinates = coordinateProblem;
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       // Scroll to top to show errors
@@ -92,7 +102,9 @@ export const EditPlacePage = () => {
         image_url: imageUrl || place?.image_url || 'https://images.unsplash.com/photo-1506461883276-594543d04e12',
         gallery_images: galleryUrls,
         menu_images: data.category === 'Cafes & Restaurants' ? menuUrls : [],
-        map_link: data.map_link,
+        map_link: mapLink.trim(),
+        latitude: coordNumber(latitude),
+        longitude: coordNumber(longitude),
         category: data.category,
         opening_hours: data.opening_hours,
         closing_hours: data.closing_hours,
@@ -299,9 +311,30 @@ export const EditPlacePage = () => {
                 type="url"
                 id="map_link"
                 name="map_link"
-                defaultValue={place.map_link || ''}
+                value={mapLink}
+                onChange={(e) => {
+                  setMapLink(e.target.value);
+                  // A link with a position in it fills the boxes, so an old pin can't outlive a new link
+                  const coords = coordsFromMapLink(e.target.value);
+                  if (coords) {
+                    setLatitude(String(coords[0]));
+                    setLongitude(String(coords[1]));
+                  }
+                }}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 font-medium focus:ring-4 focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none transition-all"
                 placeholder="Link to a blog, Google Maps pin, or official website"
+              />
+              <MapLinkNotice mapLink={mapLink} latitude={latitude} longitude={longitude} />
+              <CoordinateFields
+                latitude={latitude}
+                longitude={longitude}
+                onChange={(lat, lng) => {
+                  setLatitude(lat);
+                  setLongitude(lng);
+                }}
+                error={errors.coordinates}
+                labelClassName="block text-sm font-semibold text-gray-900"
+                inputClassName="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 font-medium focus:ring-4 focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none transition-all"
               />
             </div>
           </div>

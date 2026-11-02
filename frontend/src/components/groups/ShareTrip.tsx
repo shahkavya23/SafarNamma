@@ -4,7 +4,7 @@ import type { Group } from '../../types';
 import { tripShareText, tripShareUrl } from '../../utils/groups';
 
 /** Share button for the trip hero: the phone's share sheet where there is one, otherwise copies the link. */
-export const ShareTrip = ({ group, destination }: { group: Group; destination: string }) => {
+export const ShareTrip = ({ group, destination, className = 'btn-ghost' }: { group: Group; destination: string; className?: string }) => {
   const [shareNote, setShareNote] = useState('');
 
   const handleShare = async () => {
@@ -23,8 +23,8 @@ export const ShareTrip = ({ group, destination }: { group: Group; destination: s
   };
 
   return (
-    <button onClick={handleShare} className="btn-ghost" aria-live="polite">
-      <Share2 className="w-4 h-4" /> {shareNote || 'Share'}
+    <button onClick={handleShare} className={className} aria-live="polite">
+      <Share2 className="w-4 h-4 shrink-0" /> {shareNote || 'Share'}
     </button>
   );
 };

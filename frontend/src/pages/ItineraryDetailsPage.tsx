@@ -3,17 +3,13 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   MapPin,
-  ArrowRight,
-  Wallet,
   Route as RouteIcon,
   Trash2,
   Plus,
   ArrowLeft,
   Navigation,
-  Sparkles,
   Share2,
   Users,
-  CheckCircle2,
   Car,
   Footprints,
   Bus,
@@ -21,16 +17,16 @@ import {
   ChevronDown,
   ArrowUpRight,
   MapPinOff,
+  Lock,
 } from 'lucide-react';
 import type { Itinerary, ItineraryStop } from '../types';
 import { itinerariesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { ItineraryMap, getStopCoords } from '../components/itineraries/ItineraryMap';
 import { AddStopModal } from '../components/itineraries/AddStopModal';
-import { ItineraryHero, readableDuration } from '../components/itineraries/ItineraryHero';
+import { ItineraryHero } from '../components/itineraries/ItineraryHero';
 import { StopFacts } from '../components/itineraries/StopFacts';
-import ScrollExpandMedia from '../components/ui/scroll-expansion-hero';
-import { fallbackPhoto, optimizeImageUrl, photoSrc } from '../utils/images';
+import { startGroupUrl, UNLOCK_RULE } from '../components/itineraries/unlock';
 
 // Same choices as the Add Stop modal
 const TRANSPORT_OPTIONS = ['Walking', 'Cab / Auto', 'Metro / Bus', 'Drive / Bike'];
@@ -129,12 +125,10 @@ export const ItineraryDetailsPage = () => {
     setTimeout(() => setCopyFeedback(''), 2500);
   };
 
-  // Navigates to Groups page with pre-filled route destination so host can start a group
+  // Navigates to Groups page with pre-filled route destination so host can start a group (which also unlocks a locked route)
   const handleStartGroup = () => {
     if (!itinerary) return;
-    const stopNames = itinerary.stops?.map((s) => s.destination?.name).filter(Boolean) as string[];
-    const routeString = stopNames.length > 0 ? stopNames.join(' ➔ ') : itinerary.title;
-    navigate(`/groups?itineraryId=${itinerary.id}&customDestination=${encodeURIComponent(routeString)}`);
+    navigate(startGroupUrl(itinerary));
   };
 
   const getTransportIcon = (mode?: string | null) => {
@@ -165,23 +159,11 @@ export const ItineraryDetailsPage = () => {
   }
 
   const sortedStops = [...(itinerary.stops || [])].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
-  const heroMeta = [
-    `${sortedStops.length} ${sortedStops.length === 1 ? 'stop' : 'stops'}`,
-    readableDuration(itinerary.estimated_duration),
-  ].filter(Boolean).join(' · ');
 
   return (
-    <ScrollExpandMedia
-      mediaType="image"
-      mediaSrc={optimizeImageUrl(itinerary.image_url || undefined, 1920) || fallbackPhoto(itinerary.id)}
-      bgImageSrc={photoSrc('ubCityNight')}
-      title={itinerary.title}
-      date={heroMeta}
-      scrollToExpand="Scroll to see the route"
-    >
     <div className="w-full bg-sand min-h-screen pb-20">
       {/* ── Top Bar / Breadcrumb ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-4 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 sm:pt-32 pb-6 flex items-center justify-between">
         <Link
           to="/itineraries"
           className="inline-flex items-center gap-2 text-sm font-semibold text-muted hover:text-ink transition-colors"
@@ -214,34 +196,59 @@ export const ItineraryDetailsPage = () => {
         <ItineraryHero
           itinerary={itinerary}
           stops={sortedStops}
-          isAdmin={isAdmin}
           onStartGroup={handleStartGroup}
-          onAddStop={() => setIsAddStopOpen(true)}
-          onSelectStop={handleMapSelectStop}
+          isLocked={itinerary.is_locked}
         />
       </div>
 
-      {/* ── Main Layout: Map & Interactive Stop Timeline ── */}
+      {itinerary.is_locked ? (
+        /* ── Locked: the map and stops stay hidden until the user hosts a group on this route ── */
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="relative overflow-hidden rounded-3xl border border-line bg-paper min-h-[420px]">
+            <div aria-hidden className="absolute inset-0 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 blur-md opacity-60 pointer-events-none select-none">
+              <div className="lg:col-span-6 rounded-2xl bg-[linear-gradient(135deg,#dfe7e2,#f3ede4)] min-h-[200px]" />
+              <div className="lg:col-span-6 space-y-4">
+                {Array.from({ length: Math.min(Math.max(itinerary.stop_count, 3), 5) }, (_, i) => (
+                  <div key={i} className="flex items-center gap-4 rounded-2xl border border-line p-4">
+                    <span className="w-16 h-16 rounded-xl bg-stone shrink-0" />
+                    <span className="flex-1 space-y-2">
+                      <span className="block h-2.5 w-24 rounded-full bg-stone" />
+                      <span className="block h-4 w-2/3 rounded-full bg-line" />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="relative flex flex-col items-center justify-center text-center px-6 py-16 min-h-[420px]">
+              <span className="w-14 h-14 rounded-2xl bg-night text-diya flex items-center justify-center mb-4 shadow-lg">
+                <Lock className="w-6 h-6" />
+              </span>
+              <h2 className="font-display text-3xl text-ink mb-2">
+                {itinerary.stop_count} {itinerary.stop_count === 1 ? 'stop' : 'stops'} waiting to be unlocked
+              </h2>
+              <p className="text-base text-ink/80 max-w-md leading-relaxed">{UNLOCK_RULE}</p>
+              <p className="text-xs text-muted max-w-md mt-2">
+                3 routes are free for everyone. Hosting a group needs an SST student account, and the route opens as soon as your group is created.
+              </p>
+              <button onClick={handleStartGroup} className="btn-primary mt-6 flex items-center gap-2 py-3 px-6">
+                <Users className="w-4 h-4" /> Create group to unlock
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+      /* ── Main Layout: Map & Interactive Stop Timeline ── */
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Interactive Map (Sticky on Desktop) */}
-        <motion.div
-          className="lg:col-span-6 lg:sticky lg:top-24 space-y-4"
-          initial={reduced ? { opacity: 0 } : { opacity: 0, y: 28 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: reduced ? 0 : 0.35, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <div className="bg-paper rounded-[28px] p-4 border border-line card-shadow">
-            <div className="flex items-center justify-between mb-3 px-2">
+        <div className="lg:col-span-6 lg:sticky lg:top-28">
+          <div className="bg-paper rounded-2xl p-3 border border-line">
+            <div className="flex items-center justify-between mb-3 px-2 pt-1">
               <div className="flex items-center gap-2">
-                <span className="relative flex w-4 h-4 items-center justify-center">
-                  {!reduced && <span className="absolute inset-0 rounded-full bg-accent/30 animate-ping" />}
-                  <MapPin className="relative w-4 h-4 text-accent" />
-                </span>
-                <span className="text-xs font-bold text-ink uppercase tracking-wider">
-                  Interactive Route Map
-                </span>
+                <MapPin className="w-4 h-4 text-accent" />
+                <span className="text-sm font-semibold text-ink">Route map</span>
               </div>
-              <span className="text-xs text-muted">Click markers for details</span>
+              <span className="text-xs text-muted">Select a pin for details</span>
             </div>
 
             <ItineraryMap
@@ -251,28 +258,14 @@ export const ItineraryDetailsPage = () => {
               className="h-[460px]"
             />
           </div>
-
-          <div className="bg-paper/70 rounded-2xl p-4 border border-line text-xs text-muted leading-relaxed">
-            <span className="font-semibold text-ink">💡 Traveler Pro-Tip:</span> Click any waypoint pin to inspect photos, dinner recommendations, and one-tap directions via Google Maps.
-          </div>
-        </motion.div>
+        </div>
 
         {/* Right Column: Step-by-Step Waypoint Stops */}
         <div className="lg:col-span-6 space-y-6">
-          <motion.div
-            className="flex items-center justify-between"
-            initial={reduced ? { opacity: 0 } : { opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: reduced ? 0 : 0.45, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div>
-              <span className="block text-[10px] font-mono uppercase tracking-[0.2em] text-accent font-semibold mb-1">
-                Stop by stop
-              </span>
-              <h2 className="font-display text-2xl sm:text-3xl text-ink">
-                The Journey <span className="text-muted font-normal text-xl">({sortedStops.length} stops)</span>
-              </h2>
-            </div>
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-2xl text-ink">
+              Stops <span className="text-muted font-normal text-lg">({sortedStops.length})</span>
+            </h2>
 
             {isAdmin && (
               <button
@@ -282,7 +275,7 @@ export const ItineraryDetailsPage = () => {
                 <Plus className="w-3.5 h-3.5" /> Add Stop
               </button>
             )}
-          </motion.div>
+          </div>
 
           {sortedStops.length === 0 ? (
             <div className="bg-paper rounded-3xl p-8 border border-line text-center">
@@ -304,15 +297,6 @@ export const ItineraryDetailsPage = () => {
             <div className="space-y-4 relative">
               {/* Connecting line behind timeline cards */}
               <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-line hidden sm:block" />
-              {/* Accent line that draws down the timeline as it scrolls into view */}
-              <motion.div
-                aria-hidden
-                className="absolute left-6 top-8 bottom-8 w-0.5 bg-gradient-to-b from-accent via-accent/60 to-transparent origin-top hidden sm:block"
-                initial={{ scaleY: 0 }}
-                whileInView={{ scaleY: 1 }}
-                viewport={{ once: true, amount: 0.1 }}
-                transition={{ duration: reduced ? 0 : 1.6, ease: [0.22, 1, 0.36, 1] }}
-              />
 
               {sortedStops.map((stop, index) => {
                 const dest = stop.destination;
@@ -322,31 +306,19 @@ export const ItineraryDetailsPage = () => {
                 return (
                   <div key={stop.id} id={`stop-card-${stop.id}`} className="relative sm:pl-14 scroll-mt-28">
                     {/* Number Badge */}
-                    <motion.div
-                      initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.4 }}
-                      whileInView={{ opacity: 1, scale: isActive ? 1.15 : 1 }}
-                      viewport={{ once: true, amount: 0.6 }}
-                      transition={{ type: 'spring', stiffness: 380, damping: 18 }}
+                    <div
                       className={`hidden sm:flex absolute left-3 top-5 -ml-3.5 w-7 h-7 rounded-full font-bold text-xs items-center justify-center border-2 border-paper transition-colors z-10 ${
-                        isActive
-                          ? 'bg-accent text-white ring-4 ring-accent/20'
-                          : 'bg-ink text-sand'
+                        isActive ? 'bg-accent text-white' : 'bg-ink text-sand'
                       }`}
                     >
                       {index + 1}
-                    </motion.div>
+                    </div>
 
                     {/* Stop Card */}
-                    <motion.div
+                    <div
                       onClick={() => setActiveStopId(isActive ? null : stop.id)}
-                      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, amount: 0.15 }}
-                      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                      className={`group/stop bg-paper rounded-3xl p-5 border transition-[border-color,box-shadow] duration-300 cursor-pointer ${
-                        isActive
-                          ? 'border-accent shadow-md ring-2 ring-accent/20'
-                          : 'border-line hover:border-ink/30 hover:shadow-md'
+                      className={`group/stop bg-paper rounded-2xl p-5 border transition-colors duration-200 cursor-pointer ${
+                        isActive ? 'border-accent' : 'border-line hover:border-ink/30'
                       }`}
                     >
                       <div className="flex flex-col sm:flex-row gap-4">
@@ -517,7 +489,7 @@ export const ItineraryDetailsPage = () => {
                           )}
                         </div>
                       )}
-                    </motion.div>
+                    </div>
                   </div>
                 );
               })}
@@ -525,35 +497,23 @@ export const ItineraryDetailsPage = () => {
           )}
 
           {/* Bottom Card: Ready to travel */}
-          <motion.div
-            initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.98 }}
-            whileInView={{ opacity: 1, y: 0, scale: 1 }}
-            viewport={{ once: true, amount: 0.4 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="relative overflow-hidden bg-night text-sand rounded-3xl p-6 sm:p-7 border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 card-shadow isolate"
-          >
-            <div aria-hidden className="pointer-events-none absolute -top-16 -right-10 w-56 h-56 rounded-full bg-accent/30 blur-3xl -z-10 motion-safe:animate-[sn-breathe_6s_ease-in-out_infinite]" />
+          <div className="bg-paper rounded-2xl p-5 border border-line flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-center sm:text-left">
-              <span className="block text-[10px] font-mono uppercase tracking-[0.2em] text-[#F4B08A] font-semibold mb-1">
-                Ready when you are
-              </span>
-              <h4 className="font-display text-2xl text-white">Want to do this trip?</h4>
-              <p className="text-xs text-sand/70 mt-1">
+              <h4 className="font-display text-xl text-ink">Want to do this trip?</h4>
+              <p className="text-xs text-muted mt-1">
                 Create a travel group with this exact route attached and invite friends.
               </p>
             </div>
-            <motion.button
+            <button
               onClick={handleStartGroup}
-              whileHover={reduced ? undefined : { y: -2 }}
-              whileTap={reduced ? undefined : { scale: 0.97 }}
-              className="cta-sheen group relative overflow-hidden btn-primary !bg-[#E05A47] hover:!bg-[#D04936] shrink-0 flex items-center gap-2 py-2.5 px-5 shadow-[0_12px_30px_-10px_rgba(224,90,71,0.9)]"
+              className="btn-primary shrink-0 flex items-center gap-2 py-2.5 px-5"
             >
               <Users className="w-4 h-4" /> Start Trip Group
-              <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
-            </motion.button>
-          </motion.div>
+            </button>
+          </div>
         </div>
       </div>
+      )}
 
       {/* Admin Add Stop Modal */}
       <AddStopModal
@@ -564,7 +524,6 @@ export const ItineraryDetailsPage = () => {
         onAddStop={handleAddStop}
       />
     </div>
-    </ScrollExpandMedia>
   );
 };
 

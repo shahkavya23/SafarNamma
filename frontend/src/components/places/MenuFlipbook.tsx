@@ -52,7 +52,7 @@ export const MenuFlipbook: React.FC<{
       initial={reduced ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] bg-night/97 backdrop-blur-md flex flex-col"
+      className="fixed inset-0 z-[100] bg-night/97 flex flex-col"
       role="dialog"
       aria-modal="true"
       aria-label={`${name} menu`}

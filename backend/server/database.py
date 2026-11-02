@@ -22,8 +22,15 @@ if SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 else:
-    # pool_pre_ping: Supabase drops idle connections; test each one before reuse
-    engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
+    # pool_pre_ping: Supabase drops idle connections; test each one before reuse.
+    # The Supabase pooler also cuts quiet connections well before 5 minutes ("server closed the connection
+    # unexpectedly"), so recycle them sooner and send TCP keepalives so idle ones stay open
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        pool_pre_ping=True,
+        pool_recycle=240,
+        connect_args={"keepalives": 1, "keepalives_idle": 30, "keepalives_interval": 10, "keepalives_count": 5},
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

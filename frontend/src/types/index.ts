@@ -153,6 +153,12 @@ export interface Itinerary {
   created_by_email: string;
   created_at: string;
   stops: ItineraryStop[];
+  // One of the 3 free routes; any other route stays locked until the user hosts a trip on it
+  is_featured: boolean;
+  // A locked route comes with no stops, only their count and names
+  is_locked: boolean;
+  stop_count: number;
+  route_preview: string[];
 }
 
 export interface CreateItineraryData {

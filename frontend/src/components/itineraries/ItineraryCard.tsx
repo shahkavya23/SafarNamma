@@ -1,9 +1,10 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, Clock, Flag, MapPin, MoreHorizontal, Navigation, Route as RouteIcon, Trash2, Wallet } from 'lucide-react';
+import { ArrowRight, Clock, Flag, Lock, MapPin, MoreHorizontal, Navigation, Route as RouteIcon, Star, Trash2, Wallet } from 'lucide-react';
 import type { Itinerary, ItineraryStop } from '../../types';
 import { readableDuration } from './ItineraryHero';
+import { startGroupUrl, UNLOCK_RULE } from './unlock';
 import { fallbackPhoto, optimizeImageUrl } from '../../utils/images';
 
 /* ─── Itinerary card ───
@@ -29,11 +30,15 @@ interface ItineraryCardProps {
   isActive?: boolean;
   isAdmin?: boolean;
   onDelete?: (e: React.MouseEvent, id: number) => void;
+  onToggleFeatured?: (e: React.MouseEvent, itinerary: Itinerary) => void;
 }
 
-export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdmin, onDelete }: ItineraryCardProps) => {
+export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdmin, onDelete, onToggleFeatured }: ItineraryCardProps) => {
   const reduced = useReducedMotion();
   const stops = [...(itinerary.stops ?? [])].sort((a, b) => a.order_index - b.order_index);
+  const locked = itinerary.is_locked;
+  // A locked route has no stops to count, so the server counts them
+  const stopCount = locked ? itinerary.stop_count : stops.length;
   const duration = readableDuration(itinerary.estimated_duration);
   const href = `/itineraries/${itinerary.id}`;
   const play = isActive && !reduced;
@@ -101,8 +106,10 @@ export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdm
 
         <div className="relative">
           <div className="flex flex-wrap gap-1.5 mb-2.5">
+            {itinerary.is_featured && <Chip icon={<Star className="w-3 h-3 fill-diya text-diya" />}>Free pick</Chip>}
+            {locked && <Chip icon={<Lock className="w-3 h-3 text-diya" />}>Locked</Chip>}
             <Chip icon={<MapPin className="w-3 h-3 text-accent" />}>
-              {stops.length} {stops.length === 1 ? 'Stop' : 'Stops'}
+              {stopCount} {stopCount === 1 ? 'Stop' : 'Stops'}
             </Chip>
             {duration && <Chip icon={<Clock className="w-3 h-3 text-[#F4B08A]" />}>{duration}</Chip>}
             {!!itinerary.estimated_budget && (
@@ -129,7 +136,9 @@ export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdm
           <span className="font-mono text-[10px] uppercase tracking-[0.2em] font-semibold">The Route</span>
         </div>
 
-        {stops.length === 0 ? (
+        {locked ? (
+          <LockedRoute rows={MIN_ROWS} />
+        ) : stops.length === 0 ? (
           <p className="py-3 text-sm text-muted">Stops for this route are being mapped out.</p>
         ) : (
           <ol ref={listRef} key={isActive ? 'front' : 'back'} className="relative" style={{ height: rowCount * ROW_HEIGHT }}>
@@ -187,13 +196,36 @@ export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdm
 
         <div className="flex items-center gap-2.5 mt-2.5">
           <Link
-            to={href}
+            to={locked ? startGroupUrl(itinerary) : href}
             draggable={false}
             className="group/cta flex-1 inline-flex items-center justify-center gap-2 h-11 rounded-full bg-accent text-white text-sm font-semibold shadow-[0_12px_30px_-10px_rgba(224,86,31,0.8)] hover:bg-accent-text transition-colors"
           >
-            Explore Route
-            <ArrowRight className="w-4 h-4 transition-transform group-hover/cta:translate-x-1" />
+            {locked ? (
+              <>
+                <Lock className="w-4 h-4" />
+                Create group to unlock
+              </>
+            ) : (
+              <>
+                Explore Route
+                <ArrowRight className="w-4 h-4 transition-transform group-hover/cta:translate-x-1" />
+              </>
+            )}
           </Link>
+          {isAdmin && onToggleFeatured && (
+            <button
+              onClick={(e) => onToggleFeatured(e, itinerary)}
+              className={`shrink-0 w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
+                itinerary.is_featured
+                  ? 'bg-diya/20 border-diya text-ink'
+                  : 'bg-sand border-line text-muted hover:text-ink'
+              }`}
+              title={itinerary.is_featured ? 'Free for everyone. Click to lock it again' : 'Make this one of the 3 free routes'}
+              aria-pressed={itinerary.is_featured}
+            >
+              <Star className={`w-4 h-4 ${itinerary.is_featured ? 'fill-diya text-diya' : ''}`} />
+            </button>
+          )}
           {isAdmin && onDelete && (
             <button
               onClick={(e) => onDelete(e, itinerary.id)}
@@ -265,6 +297,32 @@ const StopRow = ({ stop, position, isFirst, isLast, fallbackHref, play, delay }:
     </motion.li>
   );
 };
+
+/** Stand-in stop rows, blurred, with the unlock rule laid over them. */
+const LockedRoute = ({ rows }: { rows: number }) => (
+  <div className="relative" style={{ height: rows * ROW_HEIGHT }}>
+    <div aria-hidden className="blur-[3px] pointer-events-none select-none opacity-70">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-3" style={{ height: ROW_HEIGHT }}>
+          <span className="shrink-0 w-9 h-9 rounded-full bg-night/80" />
+          <span className="shrink-0 w-10 h-10 rounded-lg bg-stone" />
+          <span className="flex-1 space-y-1.5">
+            <span className="block h-2 w-16 rounded-full bg-stone" />
+            <span className="block h-3 rounded-full bg-line" style={{ width: `${70 - (i % 3) * 12}%` }} />
+          </span>
+        </div>
+      ))}
+    </div>
+    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+      <span className="w-10 h-10 rounded-full bg-night text-diya flex items-center justify-center mb-2 shadow-lg">
+        <Lock className="w-4 h-4" />
+      </span>
+      <p className="text-sm font-semibold text-ink leading-snug max-w-[18rem] [text-shadow:0_0_12px_var(--color-paper,#fff)]">
+        {UNLOCK_RULE}
+      </p>
+    </div>
+  </div>
+);
 
 const Chip = ({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) => (
   <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-night/70 backdrop-blur-md border border-white/15 text-sand flex items-center gap-1.5">

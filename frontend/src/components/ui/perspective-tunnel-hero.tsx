@@ -10,13 +10,17 @@ import {
   type MotionValue,
 } from 'motion/react';
 import { ChevronsDown } from 'lucide-react';
+import { preloadImage } from '../../utils/images';
 
 /* ─── Perspective tunnel hero ───
    Photos fly out of the distance and past the viewer while the copy holds still in the
-   middle. One value drives it all: a short share plays by itself once the photos are
-   ready, and the page's own scroll plays the rest, so wheel, touch, keyboard and
+   middle. One value drives it all: a short share plays by itself once the opening photos
+   are in, and the page's own scroll plays the rest, so wheel, touch, keyboard and
    scrollbar all work and the page is never trapped. The section pins itself while the
-   tunnel plays, then lets go. Reduced-motion users get a still arrangement, unpinned. */
+   tunnel plays, then lets go. Reduced-motion users get a still arrangement, unpinned.
+   A card only ever shows a photo that has loaded: it stays away until its first one is
+   in, and a new photo fades over the old one, so items can change while the tunnel plays.
+   Keep the number of items fixed, since it sets each card's place in the flight. */
 
 export interface TunnelItem {
   src: string;
@@ -26,7 +30,7 @@ export interface TunnelItem {
 
 interface PerspectiveTunnelHeroProps {
   items: TunnelItem[];
-  /** The photos are in: start the fly-out */
+  /** The opening photos are in: start the fly-out */
   ready: boolean;
   scrollHint?: string;
   children: ReactNode;
@@ -38,6 +42,8 @@ const INTRO_SECONDS = 1.4;
 const STILL_PROGRESS = 0.42;
 const STAGGER_SPAN = 0.55;
 const POINTER_SPRING = { stiffness: 60, damping: 25, mass: 0.5 };
+const PHOTO_FADE = { duration: 0.6 };
+const PHOTO_CLASS = 'absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110';
 
 interface Stage {
   width: number;
@@ -81,6 +87,22 @@ interface TunnelCardProps {
 }
 
 const TunnelCard = ({ item, index, total, progress, pointer, stage }: TunnelCardProps) => {
+  const reduced = useReducedMotion();
+  const [photo, setPhoto] = useState<{ current: TunnelItem; previousSrc?: string } | null>(null);
+
+  // A photo that fails leaves the card on the one it already has
+  useEffect(() => {
+    let cancelled = false;
+    preloadImage(item.src).then((loaded) => {
+      if (cancelled || !loaded) return;
+      setPhoto((p) => ({ current: item, previousSrc: p?.current.src }));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.src]);
+
   const start = (index / total) * (1 - STAGGER_SPAN);
   const local = useTransform(progress, [start, start + STAGGER_SPAN], [0, 1]);
 
@@ -106,29 +128,44 @@ const TunnelCard = ({ item, index, total, progress, pointer, stage }: TunnelCard
     return `translate3d(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px), ${currZ}px) rotateZ(${rotateZ}deg)`;
   });
 
+  if (!photo) return null;
+
+  // Same photo, possibly a newer title or click target (a route was removed, say)
+  const shown = photo.current.src === item.src ? item : photo.current;
+
   return (
     <motion.button
       type="button"
       // The route chips offer the same thing to keyboards and screen readers
       tabIndex={-1}
       aria-hidden
-      onClick={item.onSelect}
+      onClick={shown.onSelect}
       style={{ width, transform, opacity, pointerEvents, zIndex: index + 1 }}
       className="group absolute left-1/2 top-1/2 aspect-[4/5] will-change-transform select-none cursor-pointer"
     >
-      <span className="relative block h-full w-full overflow-hidden rounded-2xl bg-stone shadow-[0_24px_60px_-20px_rgba(14,31,34,0.55)] ring-1 ring-ink/10 transition-shadow duration-500 group-hover:ring-2 group-hover:ring-accent">
-        <img
-          src={item.src}
+      <motion.span
+        initial={reduced ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={PHOTO_FADE}
+        className="relative block h-full w-full overflow-hidden rounded-2xl bg-stone shadow-[0_24px_60px_-20px_rgba(14,31,34,0.55)] ring-1 ring-ink/10 transition-shadow duration-500 group-hover:ring-2 group-hover:ring-accent"
+      >
+        {photo.previousSrc && <img src={photo.previousSrc} alt="" draggable={false} className={PHOTO_CLASS} />}
+        <motion.img
+          key={shown.src}
+          src={shown.src}
           alt=""
           draggable={false}
-          className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+          initial={reduced || !photo.previousSrc ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={PHOTO_FADE}
+          className={PHOTO_CLASS}
         />
         <span className="absolute inset-0 flex items-end p-3 sm:p-4 bg-linear-to-t from-night/80 via-night/10 to-transparent text-left">
           <span className="font-mono text-[10px] sm:text-xs uppercase tracking-widest text-white line-clamp-2">
-            {item.title}
+            {shown.title}
           </span>
         </span>
-      </span>
+      </motion.span>
     </motion.button>
   );
 };
@@ -182,7 +219,7 @@ const PerspectiveTunnelHero = ({ items, ready, scrollHint, children }: Perspecti
         <div className="absolute inset-0 pointer-events-none z-10" style={{ transformStyle: 'preserve-3d' }}>
           {cards.map(({ item, index }) => (
             <TunnelCard
-              key={item.src}
+              key={index}
               item={item}
               index={index}
               total={cards.length}

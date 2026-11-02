@@ -29,6 +29,13 @@
   --color-sage-text:   #4E7262;   /* 4.6:1 */
   --color-sage-soft:   #DCE6DE;
   --color-gold:        #C99A3B;   /* stars, rules — decoration only */
+  /* Trip roles: what a colour means on Groups (open seats, leaving within a day) */
+  --color-seat:          var(--color-sage);
+  --color-boarding:      var(--color-gold);
+  --color-boarding-soft: #F3E6C8;
+  --color-boarding-text: #7A5618;   /* 5.1:1 on boarding-soft */
+  --color-marigold:    #F2A516;   /* festive garlands, lit route — decoration only */
+  --color-diya:        #FFC15E;   /* diya flame, lit icons on night bands */
   --color-night:       #0E1F22;   /* dark bands, overlays, footer */
   --color-night-soft:  #17302F;
 
@@ -70,6 +77,18 @@
 
   --color-success:       #2F7D5B;
   --color-danger:        #B42318;
+  --color-success-soft:  #DDEEE4;
+  --color-danger-soft:   #F8DEDA;
+
+  /* ── Hover shades of the button fills ── */
+  --color-ink-hover:     #1B3D42;
+  --color-accent-hover:  #A33D16;
+  --color-sage-hover:    #3F5F51;
+
+  /* ── Text and status on night bands (departure board, dark sections) ── */
+  --color-on-night-accent: #F4B08A;
+  --color-on-night-ok:     #7FE0A8;
+  --color-on-night-alert:  #FF8A7A;
 
   /* ── Typography ── */
   --font-display: 'Fraunces', Georgia, serif;
@@ -246,7 +265,7 @@
     background: currentColor;
     flex-shrink: 0;
   }
-  .band-night .section-label, .on-photo .section-label { color: #F4B08A; }
+  .band-night .section-label, .on-photo .section-label { color: var(--color-on-night-accent); }
 
   /* ── Buttons ── */
   .btn-primary, .btn-ghost, .btn-teal, .btn-accent {
@@ -266,13 +285,13 @@
     white-space: nowrap;
   }
   .btn-primary { background: var(--color-ink); color: var(--color-sand); box-shadow: 0 10px 24px -14px rgba(16,42,46,0.7); }
-  .btn-primary:hover { background: #1B3D42; box-shadow: 0 16px 32px -14px rgba(16,42,46,0.8); }
+  .btn-primary:hover { background: var(--color-ink-hover); box-shadow: 0 16px 32px -14px rgba(16,42,46,0.8); }
   .btn-accent { background: var(--color-accent-text); color: #fff; box-shadow: 0 12px 28px -14px rgba(224,86,31,0.8); }
-  .btn-accent:hover { background: #A33D16; }
+  .btn-accent:hover { background: var(--color-accent-hover); }
   .btn-ghost { background: transparent; color: var(--color-ink); border-color: var(--color-line-strong); }
   .btn-ghost:hover { background: rgba(16,42,46,0.05); border-color: var(--color-ink); }
   .btn-teal { background: var(--color-sage-text); color: #fff; }
-  .btn-teal:hover { background: #3F5F51; }
+  .btn-teal:hover { background: var(--color-sage-hover); }
   /* Variants for dark photo backgrounds */
   .on-photo .btn-primary, .band-night .btn-primary { background: var(--color-sand); color: var(--color-ink); }
   .on-photo .btn-primary:hover, .band-night .btn-primary:hover { background: #fff; }
@@ -294,8 +313,8 @@
   }
   .badge-amber   { background: var(--color-accent-soft); color: var(--color-accent-text); }
   .badge-teal    { background: var(--color-sage-soft);   color: var(--color-sage-text); }
-  .badge-success { background: #DDEEE4; color: #2F7D5B; }
-  .badge-danger  { background: #F8DEDA; color: #B42318; }
+  .badge-success { background: var(--color-success-soft); color: var(--color-success); }
+  .badge-danger  { background: var(--color-danger-soft); color: var(--color-danger); }
 
   .chip {
     display: inline-flex;
@@ -377,8 +396,9 @@
   }
   .nav-pill {
     background: rgba(14,31,34,0.28);
-    backdrop-filter: blur(18px) saturate(1.4);
-    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    /* Light blur: the jeep and the page both move behind this every frame, and the blur re-samples each time */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border: 1px solid rgba(255,255,255,0.16);
   }
   /* Solid ground behind the navbar + a stuck filter bar, so content scrolls under it instead of showing through */
@@ -394,20 +414,34 @@
   .sticky-shelf[data-on='true'] { opacity: 1; }
 
   .nav-pill-scrolled {
-    background: rgba(251,248,243,0.86);
+    /* Nearly opaque, so the blur is invisible: skip it and save a re-blur on every scroll frame */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(251,248,243,0.94);
     border-color: var(--color-line);
     box-shadow: 0 12px 36px -18px rgba(16,42,46,0.45);
   }
 
   /* ── Cards ── */
+  /* --tilt-x/--tilt-y and --glow-x/--glow-y are set by PlaceCard as the mouse moves */
   .place-card {
     border: 1px solid var(--color-line);
+    transform: perspective(1000px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
     transition: transform 500ms var(--ease-out-expo), box-shadow 500ms var(--ease-out-expo), border-color 300ms ease;
   }
   .place-card:hover {
-    transform: translateY(-6px);
+    transform: perspective(1000px) translateY(-6px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+    transition: transform 180ms ease-out, box-shadow 500ms var(--ease-out-expo), border-color 300ms ease;
     border-color: var(--color-line-strong);
     box-shadow: 0 2px 4px rgba(16,42,46,0.05), 0 32px 60px -28px rgba(16,42,46,0.45);
+  }
+  .place-card-glow {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0;
+    background: radial-gradient(320px circle at var(--glow-x, 50%) var(--glow-y, 50%), rgba(255,193,94,0.22), transparent 60%);
+    transition: opacity 300ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .place-card:hover .place-card-glow { opacity: 1; }
   }
   .place-card-img { transition: transform 900ms var(--ease-out-expo), filter 400ms ease; }
   .place-card:hover .place-card-img { transform: scale(1.06); }
@@ -470,8 +504,7 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    opacity: 0.09;
-    mix-blend-mode: overlay;
+    opacity: 0.05;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     z-index: 2;
   }
@@ -552,6 +585,118 @@
   .reveal.visible { opacity: 1; transform: none; }
 }
 
+/* Trip page: the join-requests card rings once when the host jumps to it from the hero */
+@keyframes sn-requests-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(224,86,31,0); }
+  25%  { box-shadow: 0 0 0 6px rgba(224,86,31,0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(224,86,31,0); }
+}
+.requests-flash { border-radius: 22px; animation: sn-requests-flash 1.4s var(--ease-out-expo) 0.45s 1; }
+
+/* ═══════════════════════════════════════════════════════
+   FESTIVE — Diwali layer (shown only while isDiwaliSeason())
+   and the moving-light border on the Host button
+   ═══════════════════════════════════════════════════════ */
+@keyframes sn-spark   { from { transform: translate(-50%, -50%) rotate(0turn); } to { transform: translate(-50%, -50%) rotate(1turn); } }
+@keyframes sn-breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.12); opacity: 0.75; } }
+@keyframes sn-sway    { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(0.5deg) translateY(1px); } }
+@keyframes sn-flicker { from { transform: scale(1) rotate(-3deg); } to { transform: scale(1.12, 0.94) rotate(3deg); } }
+@keyframes sn-twinkle { to { opacity: 0.5; } }
+@keyframes sn-sheen   { 60%, 100% { left: 120%; } }
+
+@layer components {
+  /* The spark is a square of conic gradient spun with transform, clipped to the pill, so the
+     GPU turns it. Animating the gradient's angle instead repainted it, and a blur, every frame. */
+  .sparkle-border {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    border-radius: 999px;
+    padding: 2px;
+    overflow: hidden;
+    background: var(--color-line-strong);
+    box-shadow: 0 0 22px -8px rgba(242,165,22,0.6);
+  }
+  .sparkle-border::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 150%;
+    aspect-ratio: 1;
+    z-index: -1;
+    background: conic-gradient(transparent 0 68%, #FFE3A3 78%, var(--color-marigold) 84%, #fff 88%, transparent 93%);
+    transform: translate(-50%, -50%);
+    animation: sn-spark 3.2s linear infinite;
+    will-change: transform;
+  }
+
+  .diya-glow {
+    background: radial-gradient(circle, rgba(255,177,71,0.45), rgba(224,86,31,0.16) 45%, transparent 70%);
+    animation: sn-breathe 5s ease-in-out infinite;
+  }
+  .toran-sway { transform-box: view-box; transform-origin: 50% 0; animation: sn-sway 6s ease-in-out infinite; }
+
+  /* Drawn Diwali night (DiwaliNightScene) */
+  .diwali-night { background: linear-gradient(180deg, #0B1630 0%, #1B2350 45%, #4A2A3E 75%, #8A3F22 100%); }
+  .diwali-night-stars {
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 20% 18%, #fff, transparent), radial-gradient(1px 1px at 70% 12%, #fff, transparent),
+      radial-gradient(1.5px 1.5px at 45% 30%, #FFE3A3, transparent), radial-gradient(1px 1px at 85% 38%, #fff, transparent),
+      radial-gradient(1px 1px at 12% 42%, #fff, transparent), radial-gradient(1.5px 1.5px at 60% 48%, #FFE3A3, transparent);
+    animation: sn-twinkle 3s ease-in-out infinite alternate;
+  }
+  .diwali-night-hill {
+    position: absolute; left: -5%; right: -5%; bottom: 0; height: 42%;
+    background: var(--color-night);
+    clip-path: polygon(0 40%, 18% 18%, 34% 34%, 52% 6%, 70% 30%, 86% 14%, 100% 32%, 100% 100%, 0 100%);
+  }
+  .diya { position: relative; width: 24px; height: 10px; background: var(--color-accent-text); border-radius: 0 0 14px 14px; }
+  .diya::before {
+    content: ""; position: absolute; left: 50%; bottom: 8px; width: 9px; height: 15px; margin-left: -4.5px;
+    background: radial-gradient(ellipse at 50% 70%, #fff 0 20%, var(--color-diya) 45%, transparent 75%);
+    border-radius: 50% 50% 50% 50% / 65% 65% 35% 35%;
+    transform-origin: 50% 100%;
+    animation: sn-flicker 1.4s ease-in-out infinite alternate;
+    animation-delay: var(--flicker-delay, 0s);
+  }
+  .diya::after {
+    content: ""; position: absolute; left: 50%; bottom: 0; width: 64px; height: 64px; margin: 0 0 -22px -32px;
+    border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(255,180,80,0.35), transparent 65%);
+  }
+
+  /* Diwali getaways strip above the departure board */
+  .festive-ribbon { background: linear-gradient(100deg, #3A1406, #7A2A0C 45%, var(--color-accent-text)); }
+  .festive-ribbon::before {
+    content: ""; position: absolute; inset: 0;
+    background-image: radial-gradient(circle at 10px 10px, rgba(255,210,120,0.18) 2px, transparent 3px);
+    background-size: 22px 22px;
+    mask-image: linear-gradient(90deg, transparent, #000 60%);
+  }
+  .festive-ribbon::after {
+    content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 40%;
+    background: linear-gradient(100deg, transparent, rgba(255,230,170,0.22), transparent);
+    animation: sn-sheen 4.5s ease-in-out infinite;
+  }
+
+  /* A light sweep across a call-to-action every few seconds, to draw the eye */
+  .cta-sheen::after {
+    content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 35%;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,0.35), transparent);
+    transform: skewX(-18deg);
+    animation: sn-sheen 3.8s ease-in-out infinite 1.5s;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cta-sheen::after { animation: none; display: none; }
+  }
+
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+}
+
 /* ── Small phones ──
    Tailwind's first breakpoint is 640px, so every phone got the layout tuned for
    ~412px Samsungs. Most Redmi/Poco/Realme phones in Chrome are 360–393px wide. */
@@ -578,12 +723,139 @@
   :root { --page-gutter: 0.875rem; }
 }
 
+/* ── Boarding pass open: a trip card's photo grows into the trip page hero (utils/tripTransition.ts) ── */
+.group-card .ticket-stub { transition: translate 260ms var(--ease-out-expo); }
+.group-card .ticket-tear { opacity: 0.35; transition: opacity 260ms ease; }
+.group-card:hover .ticket-stub, .group-card:active .ticket-stub { translate: 0 2px; }
+.group-card:hover .ticket-tear, .group-card:active .ticket-tear { opacity: 1; }
+
+::view-transition-group(trip-photo) { animation-duration: 560ms; animation-timing-function: var(--ease-out-expo); }
+::view-transition-old(trip-photo), ::view-transition-new(trip-photo) { height: 100%; object-fit: cover; }
+::view-transition-old(trip-stub) { animation: sn-ticket-tear 380ms var(--ease-out-expo) both; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 220ms; }
+@keyframes sn-ticket-tear {
+  to { opacity: 0; transform: translateY(14px) rotate(-2deg); }
+}
+
+/* ── Groups hero buttons: on top of .btn-primary / .btn-ghost (magnetic pull and ripple come from those) ── */
+.hero-cta, .hero-browse,
+.fx-motion .hero-cta, .fx-motion .hero-browse {
+  transition: background-color 220ms ease, color 220ms ease, border-color 220ms ease, box-shadow 220ms ease,
+    translate 260ms var(--ease-out-expo), scale 160ms ease;
+}
+.hero-cta:active, .hero-browse:active { scale: 0.97; }
+.hero-cta:focus-visible, .hero-browse:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+
+/* Start a trip: an orange plus that turns on hover, and a light sweep across the pill */
+.hero-cta { padding: 0.45rem 1.4rem 0.45rem 0.45rem; gap: 0.8rem; }
+.hero-cta-icon {
+  width: 2.35rem; height: 2.35rem; border-radius: 9999px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--color-accent); color: #fff;
+  transition: rotate 450ms var(--ease-out-expo), scale 300ms var(--ease-out-expo);
+}
+.hero-cta:hover .hero-cta-icon { rotate: 90deg; scale: 1.06; }
+.hero-cta::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(110deg, transparent 35%, rgba(251,248,243,0.16) 50%, transparent 65%);
+  translate: -120% 0; transition: translate 800ms var(--ease-out-expo);
+}
+.hero-cta:hover::after { translate: 120% 0; }
+
+/* Browse trips: paper pill, live count, and an arrow that drops through its circle on hover */
+.hero-browse { background: var(--color-paper); padding: 0.45rem 0.45rem 0.45rem 1.3rem; gap: 0.65rem; }
+.hero-browse:hover { border-color: var(--color-ink); box-shadow: 0 14px 30px -18px rgba(16,42,46,0.5); }
+.hero-browse-icon {
+  position: relative; width: 2.35rem; height: 2.35rem; border-radius: 9999px; overflow: hidden; flex-shrink: 0;
+  background: var(--color-stone); color: var(--color-ink);
+  transition: background-color 260ms ease, color 260ms ease;
+}
+.hero-browse-icon > * {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  transition: translate 420ms var(--ease-out-expo);
+}
+.hero-browse-icon > :last-child { translate: 0 -120%; }
+.hero-browse:hover .hero-browse-icon { background: var(--color-ink); color: var(--color-sand); }
+.hero-browse:hover .hero-browse-icon > :first-child { translate: 0 120%; }
+.hero-browse:hover .hero-browse-icon > :last-child { translate: 0 0; }
+
 /* ── Reduced motion: everything visible, nothing moves ── */
 @media (prefers-reduced-motion: reduce) {
+  .hero-cta:hover .hero-cta-icon { rotate: none; scale: none; }
+  .hero-cta::after { display: none; }
+  .hero-browse-icon > * { transition: none; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+  .group-card:hover .ticket-stub { translate: none; }
   .reveal { opacity: 1; transform: none; transition: none; }
   .place-card:hover, .group-card:hover, .place-card:hover .place-card-img { transform: none; }
   .animate-fade-up, .animate-fade-in, .animate-scale-in { animation: none; opacity: 1; transform: none; }
-  .animate-marquee, .animate-float, .animate-scroll-cue, .sn-pin-pulse, .animate-pulse-dot, .live-dot { animation: none; }
+  .animate-marquee, .animate-float, .animate-scroll-cue, .sn-pin-pulse, .animate-pulse-dot, .live-dot, .requests-flash { animation: none; }
   .sn-route-draw, .sn-pin { transition: none !important; }
+  .sparkle-border, .sparkle-border::before, .diya-glow, .toran-sway, .diya::before, .diwali-night-stars, .festive-ribbon::after { animation: none; }
   [data-parallax] { transform: scale(1.12); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   EXPLORE CATEGORY THEMES
+   The Explore page re-skins per category by setting the colour variables inline
+   (utils/categoryThemes.ts). Registering them as colours lets them fade instead of snap.
+   ═══════════════════════════════════════════════════════ */
+@property --color-sand        { syntax: '<color>'; inherits: true; initial-value: #F2ECE3; }
+@property --color-paper       { syntax: '<color>'; inherits: true; initial-value: #FBF8F3; }
+@property --color-stone       { syntax: '<color>'; inherits: true; initial-value: #E7DED1; }
+@property --color-ink         { syntax: '<color>'; inherits: true; initial-value: #102A2E; }
+@property --color-body        { syntax: '<color>'; inherits: true; initial-value: #3E4F4F; }
+@property --color-muted       { syntax: '<color>'; inherits: true; initial-value: #5E6A68; }
+@property --color-accent      { syntax: '<color>'; inherits: true; initial-value: #E0561F; }
+@property --color-accent-text { syntax: '<color>'; inherits: true; initial-value: #B8461A; }
+@property --color-accent-soft { syntax: '<color>'; inherits: true; initial-value: #F7DCCB; }
+
+.explore-theme {
+  background-color: var(--color-sand);
+  transition: --color-sand 700ms ease, --color-paper 700ms ease, --color-stone 700ms ease, --color-ink 700ms ease,
+    --color-body 700ms ease, --color-muted 700ms ease, --color-accent 700ms ease, --color-accent-text 700ms ease,
+    --color-accent-soft 700ms ease;
+}
+/* Surfaces that hard-code the light paper colour follow the theme instead */
+.explore-theme .glass { background: color-mix(in srgb, var(--color-paper) 80%, transparent); }
+.explore-theme .search-bar { background: color-mix(in srgb, var(--color-paper) 95%, transparent); border-color: var(--color-line); }
+.explore-theme .search-bar:focus-within { box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 25%, transparent), 0 20px 50px -20px rgba(0,0,0,0.5); }
+.explore-theme .btn-primary:hover { background: color-mix(in srgb, var(--color-ink) 86%, var(--color-sand)); }
+.explore-theme .btn-accent { box-shadow: 0 12px 28px -14px var(--color-accent); }
+.explore-theme .btn-accent:hover { background: color-mix(in srgb, var(--color-accent-text) 85%, black); }
+/* Dark themes: the accent is light, so its buttons take dark text */
+.explore-theme[data-dark='true'] .btn-accent { color: var(--color-sand); }
+.explore-theme[data-dark='true'] .btn-accent:hover { background: var(--color-accent); }
+/* Dark themes turn sand near-black, so the closing banner takes its colours from the theme instead */
+.explore-theme[data-dark='true'] .contribute-banner { background: var(--color-sand); }
+.explore-theme[data-dark='true'] .contribute-banner > .bg-gradient-to-r {
+  background: linear-gradient(to right, var(--color-sand), color-mix(in srgb, var(--color-sand) 75%, transparent), transparent);
+}
+.explore-theme[data-dark='true'] .contribute-banner h2 { color: var(--color-ink); }
+.explore-theme[data-dark='true'] .contribute-banner h2 .italic,
+.explore-theme[data-dark='true'] .contribute-banner .section-label { color: var(--color-accent-text); }
+.explore-theme[data-dark='true'] .contribute-banner h2 + p { color: var(--color-body); }
+.explore-theme[data-dark='true'] .contribute-banner .btn-primary {
+  background: var(--color-accent); color: var(--color-sand);
+  box-shadow: 0 12px 28px -14px var(--color-accent);
+}
+.explore-theme[data-dark='true'] .contribute-banner .btn-primary:hover { background: var(--color-accent-text); }
+/* Display fonts other than Fraunces have no optical-size axis and read best a little lighter */
+.explore-theme .text-display { font-variation-settings: normal; }
+
+@media (prefers-reduced-motion: reduce) {
+  .explore-theme { transition: none; }
+}
+
+/* Itinerary map: soften and warm the basemap so it sits with the sand palette */
+.sn-map-tiles {
+  filter: sepia(0.3) saturate(0.55) contrast(0.9) brightness(1.06);
+}
+.leaflet-container .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 10px;
+}
+.leaflet-bar a {
+  border-radius: 10px !important;
+  color: #102A2E;
 }

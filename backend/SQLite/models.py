@@ -196,6 +196,7 @@ class Itinerary(Base):
     estimated_budget = Column(Float, nullable=True)     # Optional budget per person
     created_by_email = Column(String, nullable=False)   # Admin who created it
     created_at = Column(DateTime, default=datetime.utcnow)
+    is_featured = Column(Boolean, default=False, nullable=False)  # One of the 3 free routes every user can open
 
     # Relationship to get all stops in proper order automatically!
     stops = relationship(

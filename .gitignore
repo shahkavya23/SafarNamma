@@ -53,3 +53,6 @@ pnpm-debug.log*
 
 # Local SQLite database (production uses Supabase)
 *.db
+
+# Claude Code local settings
+.claude/

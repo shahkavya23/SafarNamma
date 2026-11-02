@@ -1,13 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogIn, Compass, Loader2, WifiOff } from 'lucide-react';
+import { Compass, Loader2, WifiOff } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { useAuth, isAdminEmail } from '../context/AuthContext';
 import { authApi } from '../api/client';
+import { DotMatrixBackground } from '../components/ui/dot-matrix-background';
 
 /* How long we wait, mid sign-in, before admitting the connection looks slow. */
 const SLOW_CONNECTION_HINT_MS = 4000;
+
+// Google's button takes a fixed pixel width: fill the card, but fit a 360px phone
+const googleWidth = () => Math.min(320, Math.max(200, window.innerWidth - 96));
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -67,63 +71,70 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="flex-grow flex items-center justify-center bg-[#FDFBF7] py-16 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 sm:p-10 rounded-3xl border border-gray-100 shadow-xl relative overflow-hidden">
+    <section className="relative flex-grow flex items-center justify-center min-h-[100svh] overflow-hidden bg-night text-sand px-4 pt-28 pb-16">
+      {/* Twinkling dot field, with a night vignette so the card sits in a pool of dark */}
+      <DotMatrixBackground className="absolute inset-0" />
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: 'radial-gradient(circle at center, rgba(14,31,34,0.85) 0%, rgba(14,31,34,0.55) 45%, rgba(14,31,34,0) 100%)' }}
+      />
+
+      <div className="relative z-10 w-full max-w-[400px] rounded-[24px] border border-white/10 bg-night-soft p-6 sm:p-8 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.75)] overflow-hidden flex flex-col items-center text-center">
         {isSigningIn && (
           <div
-            className="absolute inset-0 z-10 bg-white/92 backdrop-blur-sm flex flex-col items-center justify-center text-center px-8"
+            className="absolute inset-0 z-10 bg-night-soft/95 backdrop-blur-sm flex flex-col items-center justify-center text-center px-8"
             role="status"
             aria-live="polite"
           >
-            <span className="w-14 h-14 rounded-full bg-[#1a4731]/10 flex items-center justify-center mb-5">
-              {isSlow ? <WifiOff className="w-6 h-6 text-[#1a4731]" /> : <Loader2 className="w-6 h-6 text-[#1a4731] animate-spin" />}
+            <span className="w-14 h-14 rounded-full bg-accent/15 flex items-center justify-center mb-5">
+              {isSlow ? <WifiOff className="w-6 h-6 text-accent" /> : <Loader2 className="w-6 h-6 text-accent animate-spin" />}
             </span>
-            <p className="font-serif text-lg font-bold text-[#071E22]">
+            <p className="text-display text-lg text-sand">
               {isSlow ? 'Still connecting…' : 'Signing you in…'}
             </p>
-            <p className="text-sm text-gray-500 mt-1.5 max-w-[26ch]">
+            <p className="text-sm text-sand/70 mt-1.5 max-w-[26ch]">
               {isSlow ? "Your connection looks slow right now. Hang tight, we haven't given up." : 'Just a moment while we verify your account.'}
             </p>
           </div>
         )}
 
-        <div className="text-center">
-          <img
-            src="/safarnamma-logo.png"
-            alt="SafarNamma"
-            className="h-20 mx-auto mb-4 drop-shadow-sm"
+        <span className="rounded-2xl bg-paper px-4 py-2.5 mb-4 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.6)]">
+          <img src="/safarnamma-logo.png" alt="SafarNamma" className="h-11 w-auto" />
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-marigold/30 bg-marigold/10 text-marigold px-3 py-1 text-xs font-bold mb-3">
+          <Compass className="w-3.5 h-3.5" /> Explorer Portal
+        </span>
+        <h1 className="text-display text-sand text-[1.75rem] leading-tight">Sign In</h1>
+        <p className="mt-2 text-sm leading-relaxed text-sand/70">
+          Sign in with any Google account to explore places. Trips are for SST students, so use your @sst.scaler.com email to join or host one.
+        </p>
+
+        <div className="h-px w-full bg-white/10 my-6" />
+
+        {error && (
+          <div role="alert" className="w-full mb-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3.5 text-sm text-red-200 text-left">
+            {error}
+          </div>
+        )}
+
+        <div className={`flex justify-center w-full ${isSigningIn ? 'pointer-events-none opacity-40' : ''}`}>
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={() => setError('Google Sign-In failed')}
+            useOneTap
+            theme="filled_black"
+            shape="pill"
+            text="continue_with"
+            size="large"
+            width={googleWidth()}
           />
-          <div className="inline-flex items-center gap-1.5 bg-amber-50 text-[#F2A541] px-3 py-1 rounded-full text-xs font-bold mb-3">
-            <Compass className="w-3.5 h-3.5" /> Explorer Portal
-          </div>
-          <h2 className="text-3xl font-serif font-bold text-[#071E22]">Sign In</h2>
-          <p className="mt-2 text-sm text-gray-500">
-            Sign in with any Google account to explore places. Trips are for SST students, so use your @sst.scaler.com email to join or host one.
-          </p>
         </div>
 
-        <div className="mt-8 space-y-6">
-          {error && (
-            <div className="bg-red-50 text-red-700 p-4 rounded-xl text-sm border border-red-100">
-              {error}
-            </div>
-          )}
-
-          <div className={`flex justify-center pt-2 ${isSigningIn ? 'pointer-events-none opacity-40' : ''}`}>
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={() => setError('Google Sign-In failed')}
-              useOneTap
-            />
-          </div>
-
-          <div className="pt-4 text-center">
-            <p className="text-xs text-gray-400">
-              By continuing, you agree to SafarNamma's Traveler Community Guidelines.
-            </p>
-          </div>
-        </div>
+        <p className="mt-6 text-xs leading-relaxed text-sand/55">
+          By continuing, you agree to SafarNamma's Traveler Community Guidelines.
+        </p>
       </div>
-    </div>
+    </section>
   );
 };

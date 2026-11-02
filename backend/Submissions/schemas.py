@@ -314,6 +314,7 @@ class ItineraryUpdate(BaseModel):
     image_url: Optional[str] = None
     estimated_duration: Optional[str] = None
     estimated_budget: Optional[float] = None
+    is_featured: Optional[bool] = None
 
 class ItineraryResponse(BaseModel):
     id: int
@@ -325,6 +326,12 @@ class ItineraryResponse(BaseModel):
     created_by_email: str
     created_at: UtcDatetime
     stops: List[ItineraryStopResponse] = []
+    # One of the 3 free routes; every other route stays locked until the user hosts a group on it
+    is_featured: bool = False
+    # Locked routes come with no stops, only their count and the stop names for the group form
+    is_locked: bool = False
+    stop_count: int = 0
+    route_preview: List[str] = []
     model_config = ConfigDict(from_attributes=True)
 
 

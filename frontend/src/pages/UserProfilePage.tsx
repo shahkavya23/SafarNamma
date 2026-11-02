@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import { Navigate, Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion, useMotionTemplate, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import {
   Mail,
@@ -150,7 +150,12 @@ export const UserProfilePage = () => {
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(true);
   const [hostedTrips, setHostedTrips] = useState<Group[]>([]);
   const [tripPlaces, setTripPlaces] = useState<Place[]>([]);
-  const [tab, setTab] = useState<Tab>('saved');
+  // ?tab=trips opens straight on My trips (the Groups page links here)
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = searchParams.get('tab');
+    return t === 'shared' || t === 'trips' ? t : 'saved';
+  });
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -581,7 +586,7 @@ export const UserProfilePage = () => {
               className="relative w-full max-w-md h-full bg-sand overflow-y-auto shadow-2xl"
               data-lenis-prevent
             >
-              <div className="sticky top-0 z-10 bg-sand/90 backdrop-blur border-b border-line px-6 sm:px-8 py-5 flex items-center justify-between">
+              <div className="sticky top-0 z-10 bg-sand/90 border-b border-line px-6 sm:px-8 py-5 flex items-center justify-between">
                 <div>
                   <p className="section-label">Profile</p>
                   <h2 id="edit-profile-title" className="font-display text-2xl text-ink mt-1">
@@ -748,7 +753,7 @@ export const UserProfilePage = () => {
                   />
                 </div>
 
-                <div className="sticky bottom-0 -mx-6 sm:-mx-8 px-6 sm:px-8 py-4 bg-sand/95 backdrop-blur border-t border-line flex gap-3 justify-end">
+                <div className="sticky bottom-0 -mx-6 sm:-mx-8 px-6 sm:px-8 py-4 bg-sand/95 border-t border-line flex gap-3 justify-end">
                   <button type="button" onClick={() => setIsEditing(false)} className="btn-ghost" disabled={isSaving || isUploadingAvatar}>
                     Cancel
                   </button>
