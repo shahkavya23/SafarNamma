@@ -157,7 +157,13 @@ export const ItinerariesHeroCopy = ({ itineraries, ready, activeId, onSelect, on
                   src={optimizeImageUrl(it.image_url || undefined, 96) || fallbackPhoto(it.id)}
                   alt=""
                   draggable={false}
+                  referrerPolicy="no-referrer"
                   className="w-8 h-8 rounded-full object-cover"
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    const fallback = fallbackPhoto(it.id);
+                    if (!img.src.endsWith(fallback)) img.src = fallback;
+                  }}
                 />
                 <span className="max-w-[9rem] truncate">{it.title}</span>
               </motion.button>

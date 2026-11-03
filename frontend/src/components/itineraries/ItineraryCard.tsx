@@ -100,7 +100,12 @@ export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdm
           src={optimizeImageUrl(itinerary.image_url || undefined, 900) || fallbackImage}
           alt=""
           draggable={false}
+          referrerPolicy="no-referrer"
           className="absolute inset-0 w-full h-full object-cover"
+          onError={(e) => {
+            const img = e.target as HTMLImageElement;
+            if (!img.src.endsWith(fallbackImage)) img.src = fallbackImage;
+          }}
         />
         <div className="absolute inset-0 bg-linear-to-t from-night via-night/55 to-night/5" />
 
@@ -281,7 +286,19 @@ const StopRow = ({ stop, position, isFirst, isLast, fallbackHref, play, delay }:
         </span>
 
         <span className="shrink-0 w-10 h-10 rounded-lg overflow-hidden bg-stone">
-          <img src={img} alt="" loading="lazy" draggable={false} className="w-full h-full object-cover" />
+          <img
+            src={img}
+            alt=""
+            loading="lazy"
+            draggable={false}
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              const el = e.target as HTMLImageElement;
+              const fallback = fallbackPhoto(stop.destination_id);
+              if (!el.src.endsWith(fallback)) el.src = fallback;
+            }}
+          />
         </span>
 
         <span className="min-w-0 flex-1">
