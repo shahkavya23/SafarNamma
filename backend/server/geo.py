@@ -1,14 +1,17 @@
 import re
 from typing import Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import requests
 
-# Google Maps puts a place's position in the URL in one of these shapes
+# Google Maps puts a place's position in the URL in one of these shapes, most reliable first.
+# (pattern, True when the longitude comes first). "@lat,lng" is only the map viewport, which on a
+# directions link is wherever the person sharing it was standing, so it is the last resort.
 _COORD_PATTERNS = (
-    r'@(-?\d+\.\d+),(-?\d+\.\d+)',
-    r'!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)',
-    r'[?&](?:q|query|ll|center)=(-?\d+\.\d+),\s*(-?\d+\.\d+)',
+    (r'!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)', False),   # the place pin
+    (r'!1d(-?\d+\.\d+)!2d(-?\d+\.\d+)', True),    # a directions destination
+    (r'[?&](?:q|query|ll|center|daddr)=(-?\d+\.\d+),\s*(-?\d+\.\d+)', False),
+    (r'@(-?\d+\.\d+),(-?\d+\.\d+)', False),
 )
 
 # Share links like maps.app.goo.gl/abc carry no coordinates until they are followed
@@ -16,10 +19,13 @@ _SHORT_HOSTS = {"maps.app.goo.gl", "goo.gl", "g.co"}
 
 
 def _match_coords(url: str) -> Optional[Tuple[float, float]]:
-    for pattern in _COORD_PATTERNS:
-        m = re.search(pattern, url)
-        if m:
-            lat, lng = float(m.group(1)), float(m.group(2))
+    url = unquote(url)
+    for pattern, lng_first in _COORD_PATTERNS:
+        # The last match wins: a directions link lists the start before the destination
+        matches = re.findall(pattern, url)
+        if matches:
+            a, b = (float(v) for v in matches[-1])
+            lat, lng = (b, a) if lng_first else (a, b)
             if -90 <= lat <= 90 and -180 <= lng <= 180 and (lat, lng) != (0.0, 0.0):
                 return lat, lng
     return None

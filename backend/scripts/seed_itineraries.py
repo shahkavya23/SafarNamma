@@ -3,6 +3,8 @@
 Run from backend/:
   python scripts/seed_itineraries.py                 # create the itineraries (skips ones that already exist)
   python scripts/seed_itineraries.py --flag-gems     # also mark the hidden-gem places as is_hidden_gem
+  python scripts/seed_itineraries.py --update        # show how existing itineraries would be rewritten from the data below
+  python scripts/seed_itineraries.py --update --apply   # ...and save it (replaces their stops)
   python scripts/seed_itineraries.py --markdown ../docs/itineraries-from-electronic-city.md   # write a preview, no DB needed
 
 Stops reference places by id, so the ids below must exist in the target database. Missing ids are
@@ -45,11 +47,11 @@ ITINERARIES = [
         "budget": 1200,
         "stops": [
             (70, "Taaza Thindi", "Cab / auto from Electronic City, leave by 7 AM", "Self-service idli, vada and filter coffee. Breakfast hours are 7 AM-12 PM; expect a queue on weekends."),
-            (41, "Sri Dodda Ganapathi Temple", "Cab", "18 ft monolithic Ganesha, free darshan. Open 6:30 AM-12:30 PM and 5:30-8:30 PM."),
+            (41, "Sri Dodda Ganapathi Temple", "Auto", "18 ft monolithic Ganesha, free darshan. Open 6:30 AM-12:30 PM and 5:30-8:30 PM."),
             (52, "Bugle Rock Park", "Walk (next to the temple)", "Hidden gem. Ancient granite rocks and a Kempegowda watchtower. Wear comfortable shoes; allow 45 min."),
             (74, "MTR", "Auto", "Rava idli and the unlimited lunch thali, around Rs. 500. Closed on Mondays, lunch is 12:30-2:30 PM."),
-            (49, "Tipu Sultan's Summer Palace", "Auto", "Wooden palace and small museum, about Rs. 20 entry. Open 8:30 AM-5:30 PM."),
-            (7, "Lalbagh Botanical Garden", "Auto", "Finish with a slow walk through 240 acres of garden. Small entry fee; best 5:30-7 PM."),
+            (49, "Tipu Sultan's Summer Palace", "Short auto ride", "Wooden palace and small museum, about Rs. 20 entry. Open 8:30 AM-5:30 PM."),
+            (7, "Lalbagh Botanical Garden", "Short auto ride", "Finish with a slow walk through 240 acres of garden. Small entry fee; best 5:30-7 PM."),
         ],
     },
     {
@@ -63,7 +65,7 @@ ITINERARIES = [
         "stops": [
             (37, "ISKCON Vaikuntha Hill", "Cab, or metro to Konanakunte Cross + auto", "Peaceful hill temple with city views and satvik prasadam. Go early; stairs can tire elders."),
             (59, "Indian Music Experience Museum", "Cab", "Hidden gem. Interactive instruments and listening stations, about Rs. 250. Open 10 AM-6 PM; plan 1-2 hours."),
-            (24, "Yediyur Lake", "Cab / auto", "Hidden gem. 1 km walking track and pedal boats; lovely near sunset and free."),
+            (24, "Yediyur Lake", "Cab / auto", "Hidden gem. Shady 1 km walking track and pedal boats around a temple-side lake; free. A calm break between the museum and Koramangala."),
             (9, "Blue Tokai Coffee Roasters", "Cab to Koramangala", "Specialty coffee and light bites, about Rs. 600. Good for a break before the evening."),
             (62, "27th Main Road Food Street", "Cab to HSR Layout", "Hidden gem. Comes alive after 6 PM. Share small plates of dosa, chaat, momos and rolls; crowded on weekends."),
         ],
@@ -78,7 +80,7 @@ ITINERARIES = [
         "budget": 1800,
         "stops": [
             (60, "Visvesvaraya Industrial & Technological Museum", "Yellow Line to Silk Board, Purple Line to Cubbon Park", "Hands-on science exhibits, about Rs. 100. Opens 9:30 AM."),
-            (51, "Vidhana Soudha", "Walk / auto", "Look at the exterior for free; inside tours run Sundays and 2nd/4th Saturdays only (about Rs. 50)."),
+            (51, "Vidhana Soudha", "Walk through Cubbon Park / auto", "Look at the exterior for free; inside tours run Sundays and 2nd/4th Saturdays only (about Rs. 50)."),
             (36, "1 MG - Lido Mall", "Auto / metro to Trinity", "A calm, premium mall with a good food hall for lunch. Open 10 AM-9:30 PM."),
             (47, "Brigade Road", "Auto or MG Road metro + walk", "Street stalls, cafes and fashion. Bargain politely; shops are open about 11 AM-9 PM."),
             (6, "Church Street", "Walk", "Fairy lights, street music, momos and boba after dark; Amoeba bowling nearby. Open till about 1 AM."),
@@ -94,10 +96,10 @@ ITINERARIES = [
         "budget": 2800,
         "stops": [
             (40, "Sri Prasanna Ganapati Temple", "Cab via Hosur Road, arrive by 9 AM", "Quiet neighbourhood temple. Open 6:30-11:50 AM and 5:30-8:30 PM; free."),
-            (13, "Dyu Art Cafe", "Auto", "Brunch in a restored Kerala-style bungalow, about Rs. 500. Long waits on weekends, so go before 11 AM."),
-            (20, "Splashit", "Auto", "Neon splatter room, pour art and slime. Book a slot; open 11 AM-8 PM, about Rs. 1,000."),
+            (13, "Dyu Art Cafe", "Walk (just down the road)", "Brunch in a restored Kerala-style bungalow, about Rs. 500. Long waits on weekends, so go before 11 AM."),
+            (20, "Splashit", "Walk (on 80 Feet Road)", "Neon splatter room, pour art and slime. Book a slot; open 11 AM-8 PM, about Rs. 1,000."),
             (64, "Glow Arena", "Auto", "Hidden gem. Neon indoor games opposite Nexus Mall, about Rs. 600. Open 11 AM-10:30 PM."),
-            (65, "Koramangala Food Street", "Auto", "Best 6-10 PM: momos, rolls, kebabs and desserts. Crowded on weekends."),
+            (65, "Koramangala Food Street", "Walk (near Nexus Mall)", "Best 6-10 PM: momos, rolls, kebabs and desserts. Crowded on weekends."),
         ],
     },
     {
@@ -113,7 +115,7 @@ ITINERARIES = [
             (54, "Begur Fort", "Cab", "Hidden gem. Thousand-year-old fort ruins, temple and inscriptions. Free; allow 45 min."),
             (76, "Bannerghatta National Park", "Cab", "Safari, zoo and butterfly park, about Rs. 80 plus safari. Closed on Tuesdays; book tickets online. Open 9:30 AM-5 PM."),
             (8, "Area 83 Adventure Resort", "Cab", "Kayaking, archery tag and paintball with a buffet lunch, about Rs. 2,000. Weekdays are less crowded."),
-            (10, "Raceway Gokarting", "Own vehicle / cab", "Outdoor track on Kanakapura Road, about Rs. 1,000. Open till 5 AM, so an evening slot works well."),
+            (10, "Raceway Gokarting", "Own vehicle / cab", "Outdoor track on Kanakapura Road, about Rs. 1,000. Call ahead for slot timings; a late-afternoon slot works well after Area 83."),
         ],
     },
     {
@@ -127,7 +129,7 @@ ITINERARIES = [
         "stops": [
             (12, "Kapoor's Cafe", "Auto from Electronic City", "Pure veg North Indian and Punjabi brunch, about Rs. 500. Open 9:30 AM-11 PM."),
             (63, "Red Riders Gokarting", "Cab to Kodathi", "Hidden gem. 750 m outdoor track plus paintball and archery, about Rs. 450 and up. Opens 10:30 AM."),
-            (27, "Helen & Lorena's Place", "Cab at Kodathi Gate", "Mediterranean-style courtyard with Spanish tapas and Italian dishes, about Rs. 750. Photogenic at sunset."),
+            (27, "Helen & Lorena's Place", "Short cab hop to Kodathi Gate", "Mediterranean-style courtyard with Spanish tapas and Italian dishes, about Rs. 750. Photogenic at sunset."),
             (46, "M5 E-City Mall", "Cab back to Electronic City", "Shopping, INOX and a food court close to home. Open 11 AM-10 PM."),
         ],
     },
@@ -144,22 +146,21 @@ ITINERARIES = [
             (55, "Halasuru Someshwara Temple", "Cab", "One of Bengaluru's oldest temples with carved pillars and a grand gopuram."),
             (56, "Ulsoor Lake", "Walk", "Boating and sunset views; free to walk around."),
             (67, "Bohemians", "Cab", "Indiranagar bungalow cafe-bar, about Rs. 1,000. Open 11:30 AM-12:30 AM; karaoke on Wednesdays."),
-            (17, "Mystery Room", "Auto", "60-minute escape rooms, about Rs. 500. Best with 4-6 friends; book online."),
+            (17, "Mystery Room", "Walk (same block on 100 Feet Road)", "60-minute escape rooms, about Rs. 500. Best with 4-6 friends; book online."),
         ],
     },
     {
         "title": "North Bengaluru Escape",
         "description": (
-            "A long day with your own cab: sunrise at Nandi Hills, the 112-ft Adiyogi statue, a forest trail and a "
-            "chocolate factory tour on the way back."
+            "A long weekend day with your own cab: sunrise at Nandi Hills, the 112-ft Adiyogi statue, and a chocolate "
+            "factory tour near Hoskote on the way home. SMOOR tours run Friday-Sunday only, so plan it for a weekend."
         ),
-        "duration": "Full Day (12+ Hours)",
+        "duration": "Full Day (13 Hours)",
         "budget": 2500,
         "stops": [
-            (50, "Nandi Hills", "Own cab, leave by 3:30 AM", "Tipu's Drop, Yoga Nandeeshwara Temple and sunrise views. Open 24/7; weekdays are calmer."),
-            (77, "Adiyogi Shiva Statue Chikkaballapur", "Cab", "Free entry, modest dress. Parking Rs. 50 for cars. Open 6 AM-8 PM."),
-            (11, "Avalahalli Forest", "Cab", "Hidden gem. Raw forest trail with peacocks. Open 6-9 AM and 3-6 PM; carry water."),
-            (61, "SMOOR Experience Centre", "Cab", "Hidden gem. Chocolate factory tour, about Rs. 1,499. Tours run Friday-Sunday only; book ahead. Closes at 6 PM."),
+            (50, "Nandi Hills", "Own cab, leave by 3:30 AM", "Tipu's Drop, Yoga Nandeeshwara Temple and sunrise views. Gates open around 6 AM; weekdays are calmer."),
+            (77, "Adiyogi Shiva Statue Chikkaballapur", "Cab down the hill", "Free entry, modest dress. Parking Rs. 50 for cars. Open 6 AM-8 PM. Have lunch in Chikkaballapur town or at the Isha canteen."),
+            (61, "SMOOR Experience Centre", "Cab via Devanahalli-Hoskote", "Hidden gem. Chocolate factory tour at Avalahalli near Hoskote (east Bengaluru), about Rs. 1,499. Tours run Friday-Sunday only; book a 3-4 PM slot. Closes at 6 PM."),
         ],
     },
     {
@@ -172,7 +173,7 @@ ITINERARIES = [
         "budget": 1800,
         "stops": [
             (39, "ISKCON Temple Bengaluru", "Metro Yellow + Green Line to Mahalakshmi", "Go 7-9 AM for a calm darshan. Dress modestly; no photography inside."),
-            (45, "Orion Mall", "Auto", "Lunch at the food court or lakeside cafes. Open 10 AM-11 PM; cinema and Timezone are paid."),
+            (45, "Orion Mall", "Walk (across the road)", "Lunch at the food court or lakeside cafes. Open 10 AM-11 PM; cinema and Timezone are paid."),
             (15, "Bangalore Palace", "Cab", "Audio guide is good; entry is about Rs. 240 and camera passes cost extra. Open 10 AM-5:30 PM."),
             (31, "Phoenix Mall of Asia", "Cab", "Foodthopia food court, digital waterfalls and shopping. Open 10 AM-10 PM."),
         ],
@@ -184,15 +185,15 @@ ITINERARIES = [
 # The first leg starts at Electronic City; "return" is the trip home from the last stop. Rough estimates
 # for normal city traffic (peak hours can add 20-40%), not live routing.
 LEGS = {
-    "Heritage, Temples & Tiffin": {"legs": [(17, 50), (4, 15), (0.3, 5), (4, 20), (4, 20), (3, 15)], "return": (20, 60)},
-    "South-Side Sampler": {"legs": [(22, 55), (6, 20), (6, 25), (8, 35), (4, 15)], "return": (14, 40)},
-    "Central Bengaluru Day": {"legs": [(20, 65), (0.7, 10), (4.5, 20), (3, 15), (0.7, 10)], "return": (20, 55)},
-    "Koramangala Day Out": {"legs": [(15, 45), (2, 10), (1.5, 10), (2, 10), (2, 10)], "return": (15, 45)},
-    "Bannerghatta Side Adventure": {"legs": [(7, 20), (14, 35), (14, 35), (5, 15), (22, 50)], "return": (35, 70)},
-    "Sarjapur Side Day (closest to E-City)": {"legs": [(3, 10), (20, 45), (1, 5), (25, 55)], "return": (0, 0)},
-    "Quirky East Bengaluru": {"legs": [(28, 75), (8, 30), (1, 5), (4, 20), (1.5, 8)], "return": (22, 65)},
-    "North Bengaluru Escape": {"legs": [(95, 150), (8, 20), (55, 80), (3, 10)], "return": (45, 105)},
-    "Royal Rajajinagar & Mall Day": {"legs": [(30, 80), (1.5, 10), (7, 30), (11, 35)], "return": (40, 90)},
+    "Heritage, Temples & Tiffin": {"legs": [(17, 50), (4, 15), (0.2, 3), (3, 12), (2, 10), (2, 10)], "return": (20, 60)},
+    "South-Side Sampler": {"legs": [(18, 50), (5, 20), (6, 25), (7, 30), (6, 20)], "return": (11, 35)},
+    "Central Bengaluru Day": {"legs": [(22, 65), (1, 10), (4.5, 20), (2, 10), (0.5, 7)], "return": (21, 60)},
+    "Koramangala Day Out": {"legs": [(15, 45), (0.2, 3), (0.7, 8), (2, 10), (0.8, 10)], "return": (15, 45)},
+    "Bannerghatta Side Adventure": {"legs": [(7, 20), (14, 35), (13, 35), (5, 15), (10, 30)], "return": (24, 60)},
+    "Sarjapur Side Day (closest to E-City)": {"legs": [(3, 10), (14, 35), (4, 12), (12, 35)], "return": (2, 8)},
+    "Quirky East Bengaluru": {"legs": [(25, 75), (4.5, 20), (1.3, 15), (3.5, 15), (0.3, 4)], "return": (19, 60)},
+    "North Bengaluru Escape": {"legs": [(80, 120), (20, 40), (65, 95)], "return": (32, 75)},
+    "Royal Rajajinagar & Mall Day": {"legs": [(30, 80), (0.6, 8), (5, 20), (10, 35)], "return": (36, 90)},
 }
 
 
@@ -242,19 +243,19 @@ def write_markdown(path: str) -> None:
     print(f"Wrote {path}")
 
 
-def seed(flag_gems: bool, email: str) -> None:
+def full_description(it: dict) -> str:
+    total_km, total_min = travel_totals(it)
+    return f"{it['description']} About {total_km:g} km and {duration_text(total_min)} on the road, round trip from Electronic City."
+
+
+def seed(flag_gems: bool, email: str, update: bool = False, apply: bool = True) -> None:
     from server.database import SessionLocal
     from SQLite import models
 
     db = SessionLocal()
     try:
-        created, skipped, missing = 0, 0, []
+        created, skipped, updated, missing = 0, 0, 0, []
         for it in ITINERARIES:
-            if db.query(models.Itinerary).filter(models.Itinerary.title == it["title"]).first():
-                print(f"  exists  {it['title']}")
-                skipped += 1
-                continue
-
             stops = []
             for (dest_id, name, transport, note), (km, mins) in zip(it["stops"], LEGS[it["title"]]["legs"]):
                 dest = db.query(models.Destination).filter(models.Destination.id == dest_id).first()
@@ -265,10 +266,40 @@ def seed(flag_gems: bool, email: str) -> None:
             if not stops:
                 continue
 
-            total_km, total_min = travel_totals(it)
+            existing = db.query(models.Itinerary).filter(models.Itinerary.title == it["title"]).first()
+            if existing and update:
+                print(f"\n  update  #{existing.id} {it['title']}")
+                for field, new in (("description", full_description(it)), ("estimated_duration", it["duration"]),
+                                   ("estimated_budget", it["budget"])):
+                    if getattr(existing, field) != new:
+                        print(f"    {field}: {getattr(existing, field)!r}\n      -> {new!r}")
+                        setattr(existing, field, new)
+                old_stops = [(s.destination_id, s.transport_mode, s.note) for s in existing.stops]
+                new_stops = [(dest.id, transport, note) for dest, transport, note in stops]
+                for order in range(max(len(old_stops), len(new_stops))):
+                    old = old_stops[order] if order < len(old_stops) else None
+                    new = new_stops[order] if order < len(new_stops) else None
+                    if old == new:
+                        continue
+                    print(f"    stop {order + 1}: {old[:2] if old else 'none'}\n         -> {new[:2] if new else 'removed'}")
+                    if old and new and old[2] != new[2]:
+                        print(f"         note -> {new[2]}")
+                existing.stops.clear()
+                db.flush()
+                for order, (dest, transport, note) in enumerate(stops, 1):
+                    existing.stops.append(models.ItineraryStop(
+                        destination_id=dest.id, order_index=order, transport_mode=transport, note=note,
+                    ))
+                updated += 1
+                continue
+            if existing:
+                print(f"  exists  {it['title']}")
+                skipped += 1
+                continue
+
             itinerary = models.Itinerary(
                 title=it["title"],
-                description=f"{it['description']} About {total_km:g} km and {duration_text(total_min)} on the road, round trip from Electronic City.",
+                description=full_description(it),
                 image_url=stops[0][0].image_url,
                 estimated_duration=it["duration"],
                 estimated_budget=it["budget"],
@@ -290,8 +321,12 @@ def seed(flag_gems: bool, email: str) -> None:
             )
             print(f"  flagged {flagged} place(s) as hidden gems")
 
-        db.commit()
-        print(f"\n{created} created, {skipped} already existed.")
+        if apply:
+            db.commit()
+        else:
+            db.rollback()
+        print(f"\n{created} created, {updated} updated, {skipped} already existed."
+              + ("" if apply else "  (dry run, nothing saved; add --apply)"))
         for title, dest_id, name in missing:
             print(f"  missing place #{dest_id} {name} (in '{title}'), stop skipped")
     finally:
@@ -303,12 +338,14 @@ def main() -> None:
     parser.add_argument("--flag-gems", action="store_true", help="mark the hidden-gem places as is_hidden_gem")
     parser.add_argument("--email", default=ADMIN_EMAIL, help="admin email recorded as creator")
     parser.add_argument("--markdown", metavar="PATH", help="write a markdown preview and exit (no database)")
+    parser.add_argument("--update", action="store_true", help="rewrite itineraries that already exist (dry run unless --apply)")
+    parser.add_argument("--apply", action="store_true", help="with --update, save the changes")
     args = parser.parse_args()
 
     if args.markdown:
         write_markdown(args.markdown)
         return
-    seed(args.flag_gems, args.email)
+    seed(args.flag_gems, args.email, update=args.update, apply=args.apply or not args.update)
 
 
 if __name__ == "__main__":
