@@ -42,18 +42,22 @@ interface CarouselConfig {
   rotationMultiplier: number;
   scaleReduction: number;
   visibleSide: number;
+  /** How dark the outermost visible cards get */
+  edgeShade: number;
 }
 
 const getCarouselConfig = (windowWidth: number, cardWidth: number, visibleSide: number): CarouselConfig => {
   if (windowWidth < 640) {
     // A phone's margin is too thin for a neighbour to peek without being cut off at the screen
-    // edge, so side cards wait just off-screen (tilt included) and slide in under the finger
+    // edge, so side cards wait just off-screen (tilt included) and slide in under the finger.
+    // No side card is ever seen at rest, so none is dimmed: the dimming would only show as a
+    // dark flicker on the cards sliding past.
     const offScreen = windowWidth / 2 + cardWidth / 2 + 24;
-    return { distanceDivisor: 120, velocityDivisor: 500, sensitivity: offScreen, xMultiplier: offScreen, yMultiplier: 10, rotationMultiplier: 3, scaleReduction: 0.06, visibleSide: 1 };
+    return { distanceDivisor: 120, velocityDivisor: 500, sensitivity: offScreen, xMultiplier: offScreen, yMultiplier: 10, rotationMultiplier: 3, scaleReduction: 0.06, visibleSide: 1, edgeShade: 0 };
   }
   // With more cards in view they sit closer together so the outer ones stay on screen
   const spacing = visibleSide > 1 ? 0.5 : 0.62;
-  return { distanceDivisor: 200, velocityDivisor: 800, sensitivity: 300, xMultiplier: cardWidth * spacing, yMultiplier: 22, rotationMultiplier: 5, scaleReduction: 0.1, visibleSide };
+  return { distanceDivisor: 200, velocityDivisor: 800, sensitivity: 300, xMultiplier: cardWidth * spacing, yMultiplier: 22, rotationMultiplier: 5, scaleReduction: 0.1, visibleSide, edgeShade: Math.min(0.7, 0.45 + (visibleSide - 1) * 0.15) };
 };
 
 const SPRING = { type: 'spring', stiffness: 200, damping: 30, mass: 1 } as const;
@@ -271,16 +275,20 @@ const StackedCard = ({ index, total, loops, isActive, progress, config, classNam
   const side = config.visibleSide;
   const opacity = useTransform(offset, [-(side + 0.4), -side, 0, side, side + 0.4], [0, 1, 1, 1, 0]);
   const pointerEvents = useTransform(offset, (o) => (Math.abs(o) > side + 0.2 ? 'none' : 'auto'));
-  // Faded-out cards aren't painted at all, so a phone's GPU only holds the few cards in view
-  const visibility = useTransform(offset, (o) => (Math.abs(o) >= side + 0.4 ? 'hidden' : 'visible'));
+  // Cards further out aren't painted at all, so a phone's GPU only holds the few near the front.
+  // The next card in line stays painted (at no opacity), so its photo is decoded and rasterised
+  // before it slides in rather than showing a blank frame on the way.
+  const visibility = useTransform(offset, (o) => (Math.abs(o) >= side + 1.4 ? 'hidden' : 'visible'));
   const zIndex = useTransform(offset, (o) => Math.round(100 - Math.abs(o) * 10));
   // The farther a card sits, the more it dims
-  const edgeShade = Math.min(0.7, 0.45 + (side - 1) * 0.15);
-  const shade = useTransform(offset, [-side, -0.3, 0, 0.3, side], [edgeShade, 0.15, 0, 0.15, edgeShade]);
+  const { edgeShade } = config;
+  const shade = useTransform(offset, [-side, -0.3, 0, 0.3, side], [edgeShade, Math.min(0.15, edgeShade), 0, Math.min(0.15, edgeShade), edgeShade]);
 
   return (
     <motion.div
-      style={{ x, rotate, y, scale, opacity, zIndex, pointerEvents, visibility }}
+      // will-change keeps each card on its own layer for good: promoting it only once it starts
+      // moving re-rasterises the card mid-swipe, which flashes its photo blank for a frame
+      style={{ x, rotate, y, scale, opacity, zIndex, pointerEvents, visibility, willChange: 'transform, opacity' }}
       onClick={isActive ? undefined : () => onBringForward(Math.round(signedOffset(progress.get())))}
       className={cn('col-start-1 row-start-1 relative', !isActive && 'cursor-pointer', className)}
     >

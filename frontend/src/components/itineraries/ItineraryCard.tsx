@@ -100,6 +100,8 @@ export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdm
           src={optimizeImageUrl(itinerary.image_url || undefined, 900) || fallbackImage}
           alt=""
           draggable={false}
+          // Painted only once decoded, so a card sliding in never shows a blank photo for a frame
+          decoding="sync"
           referrerPolicy="no-referrer"
           className="absolute inset-0 w-full h-full object-cover"
           onError={(e) => {
@@ -146,7 +148,9 @@ export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdm
         ) : stops.length === 0 ? (
           <EmptyRoute rows={MIN_ROWS} />
         ) : (
-          <ol ref={listRef} key={isActive ? 'front' : 'back'} className="relative" style={{ height: rowCount * ROW_HEIGHT }}>
+          // Not remounted when the card comes to the front: the animations replay on their own,
+          // and the stop photos stay loaded instead of blinking out and back mid-slide
+          <ol ref={listRef} className="relative" style={{ height: rowCount * ROW_HEIGHT }}>
             {/* Track, the inked line, and the traveller walking it */}
             <div
               aria-hidden
@@ -156,8 +160,8 @@ export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdm
               <motion.div
                 className="absolute inset-0 rounded-full bg-linear-to-b from-sage via-accent to-accent origin-top"
                 initial={play ? { scaleY: 0 } : false}
-                animate={{ scaleY: 1 }}
-                transition={{ duration: drawTime, ease: 'easeInOut', delay: 0.15 }}
+                animate={play ? { scaleY: [0, 1] } : { scaleY: 1 }}
+                transition={play ? { duration: drawTime, ease: 'easeInOut', delay: 0.15 } : { duration: 0 }}
               />
               {play && stops.length > 1 && (
                 <motion.span
@@ -266,8 +270,8 @@ const StopRow = ({ stop, position, isFirst, isLast, fallbackHref, play, delay }:
   return (
     <motion.li
       initial={play ? { opacity: 0, x: 18 } : false}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay, duration: 0.45, ease: EASE }}
+      animate={play ? { opacity: [0, 1], x: [18, 0] } : { opacity: 1, x: 0 }}
+      transition={play ? { delay, duration: 0.45, ease: EASE } : { duration: 0 }}
       className="relative"
       style={{ height: ROW_HEIGHT }}
     >
@@ -289,7 +293,7 @@ const StopRow = ({ stop, position, isFirst, isLast, fallbackHref, play, delay }:
           <img
             src={img}
             alt=""
-            loading="lazy"
+            decoding="sync"
             draggable={false}
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover"
