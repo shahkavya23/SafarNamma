@@ -2,7 +2,6 @@ import * as React from 'react';
 import {
   motion,
   useMotionValue,
-  useMotionValueEvent,
   useTransform,
   animate,
   type PanInfo,
@@ -44,7 +43,10 @@ interface CarouselConfig {
 
 const getCarouselConfig = (windowWidth: number, cardWidth: number): CarouselConfig => {
   if (windowWidth < 640) {
-    return { distanceDivisor: 120, velocityDivisor: 500, sensitivity: 240, xMultiplier: cardWidth * 0.88, yMultiplier: 10, rotationMultiplier: 3, scaleReduction: 0.06 };
+    // A phone's margin is too thin for a neighbour to peek without being cut off at the screen
+    // edge, so side cards wait just off-screen (tilt included) and slide in under the finger
+    const offScreen = windowWidth / 2 + cardWidth / 2 + 24;
+    return { distanceDivisor: 120, velocityDivisor: 500, sensitivity: offScreen, xMultiplier: offScreen, yMultiplier: 10, rotationMultiplier: 3, scaleReduction: 0.06 };
   }
   return { distanceDivisor: 200, velocityDivisor: 800, sensitivity: 300, xMultiplier: cardWidth * 0.62, yMultiplier: 22, rotationMultiplier: 5, scaleReduction: 0.1 };
 };
@@ -66,8 +68,12 @@ const CarouselStacked = <T,>({
   const scrollProgress = useMotionValue(0);
   const startProgress = React.useRef(0);
   const pointerStart = React.useRef<{ x: number; y: number } | null>(null);
+  // The card the deck rests on or is heading to. Cards it only passes on the way never count,
+  // so the page hears about each move once and its answer can't send the deck back.
   const [active, setActive] = React.useState(0);
   const activeRef = React.useRef(0);
+  // Where the deck is heading, so quick taps on the arrows add up instead of being lost mid-flight
+  const destProgress = React.useRef(0);
   const [windowWidth, setWindowWidth] = React.useState(() =>
     typeof window === 'undefined' ? 1280 : window.innerWidth,
   );
@@ -97,35 +103,44 @@ const CarouselStacked = <T,>({
   React.useEffect(() => {
     if (!total) return;
     const next = wrap(Math.round(scrollProgress.get()), total);
-    scrollProgress.set(next);
+    scrollProgress.jump(next);
+    destProgress.current = next;
     markActive(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [total, scrollProgress]);
 
   const config = React.useMemo(() => getCarouselConfig(windowWidth, cardWidth(windowWidth)), [windowWidth, cardWidth]);
 
-  useMotionValueEvent(scrollProgress, 'change', (p) => {
-    if (total) markActive(wrap(Math.round(p), total));
-  });
-
   const moveTo = (p: number) => {
-    animate(scrollProgress, settle(p), SPRING);
+    const dest = settle(p);
+    destProgress.current = dest;
+    markActive(wrap(Math.round(dest), total));
+    animate(scrollProgress, dest, SPRING);
   };
-  const step = (dir: 1 | -1) => moveTo(Math.round(scrollProgress.get()) + dir);
+  const step = (dir: 1 | -1) =>
+    moveTo(Math.round(scrollProgress.isAnimating() ? destProgress.current : scrollProgress.get()) + dir);
 
-  // Asked from outside to show a card: go the short way round
+  // Asked from outside to show a card: go the short way round from wherever the deck is now.
+  // The deck's own reports come back here too; they match the card it's heading to, so they're skipped.
   React.useEffect(() => {
     if (activeIndex === undefined || !total) return;
     const target = wrap(activeIndex, total);
     if (target === activeRef.current) return;
-    let diff = target - activeRef.current;
+    const here = Math.round(scrollProgress.get());
+    let diff = target - wrap(here, total);
     if (loops) {
       if (diff > total / 2) diff -= total;
       if (diff < -total / 2) diff += total;
     }
-    moveTo(Math.round(scrollProgress.get()) + diff);
+    moveTo(here + diff);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex]);
+
+  // A grab mid-flight takes over from the spring instead of fighting it
+  const handlePanStart = () => {
+    scrollProgress.stop();
+    startProgress.current = scrollProgress.get();
+  };
 
   const handlePanEnd = (_: PointerEvent, info: PanInfo) => {
     const distanceShift = -info.offset.x / config.distanceDivisor;
@@ -165,7 +180,7 @@ const CarouselStacked = <T,>({
         onKeyDown={handleKey}
         onPointerDownCapture={(e) => (pointerStart.current = { x: e.clientX, y: e.clientY })}
         onClickCapture={handleClickCapture}
-        onPanStart={() => (startProgress.current = scrollProgress.get())}
+        onPanStart={handlePanStart}
         onPan={(_, info) => scrollProgress.set(settle(scrollProgress.get() - info.delta.x / config.sensitivity))}
         onPanEnd={handlePanEnd}
         style={{ touchAction: 'pan-y' }}
@@ -249,12 +264,14 @@ const StackedCard = ({ index, total, loops, isActive, progress, config, classNam
   // Only the front card and its neighbours show, so big cards never pile up behind each other
   const opacity = useTransform(offset, [-1.4, -1, 0, 1, 1.4], [0, 1, 1, 1, 0]);
   const pointerEvents = useTransform(offset, (o) => (Math.abs(o) > 1.2 ? 'none' : 'auto'));
+  // Faded-out cards aren't painted at all, so a phone's GPU only holds the few cards in view
+  const visibility = useTransform(offset, (o) => (Math.abs(o) >= 1.4 ? 'hidden' : 'visible'));
   const zIndex = useTransform(offset, (o) => Math.round(100 - Math.abs(o) * 10));
   const shade = useTransform(offset, [-1, -0.3, 0, 0.3, 1], [0.45, 0.15, 0, 0.15, 0.45]);
 
   return (
     <motion.div
-      style={{ x, rotate, y, scale, opacity, zIndex, pointerEvents }}
+      style={{ x, rotate, y, scale, opacity, zIndex, pointerEvents, visibility }}
       onClick={isActive ? undefined : () => onBringForward(Math.round(signedOffset(progress.get())))}
       className={cn('col-start-1 row-start-1 relative', !isActive && 'cursor-pointer', className)}
     >

@@ -29,9 +29,10 @@ export const RouteIndex = ({ itineraries, activeIndex, onSelect }: RouteIndexPro
       <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-accent-text">
         Route {activeIndex + 1} of {itineraries.length}
       </p>
+      {/* Safe centring: once the pills overflow they start at the left edge, so the first ones can still be scrolled to */}
       <div
         ref={rowRef}
-        className="w-full max-w-4xl flex gap-2 overflow-x-auto px-4 py-1 sm:justify-center [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="w-full max-w-4xl flex gap-2 overflow-x-auto px-4 py-1 sm:justify-center-safe [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {itineraries.map((it, i) => {
           const isActive = i === activeIndex;
