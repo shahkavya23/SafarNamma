@@ -24,6 +24,10 @@ export type LiquidNavItem = {
   icon?: React.ReactNode
   /** the little scene the icon plays when tapped */
   fx?: NimbusFx
+  /** Diwali dress-up: a flickering diya glow, an anar fountain of sparks and a gold shimmer on the label */
+  festive?: boolean
+  /** a small sticker on the item's corner, e.g. "New" */
+  badge?: string
 }
 
 export type LiquidNavbarProps = {
@@ -63,6 +67,13 @@ const DEFAULT_ITEMS: LiquidNavItem[] = [
   { label: "Weather", icon: NimbusIcons.drop, fx: "drop" },
   { label: "Profile", icon: NimbusIcons.user, fx: "wave" },
 ]
+
+// festive sparks: an upward anar fan that idles, and a full ring that bursts on tap
+const SPARK_COLORS = ["#FFD166", "#FF9F1C", "#E0561F", "#F15BB5", "#FFF1B8"]
+const ANAR = [-62, -40, -20, 0, 18, 38, 60].map((a, i) => ({ a, d: 15 + (i % 3) * 4, dl: (i % 4) * 0.07, c: SPARK_COLORS[i % 5] }))
+const BURST = Array.from({ length: 12 }, (_, i) => ({ a: i * 30, d: 22 + (i % 2) * 8, dl: (i % 3) * 0.04, c: SPARK_COLORS[(i * 2) % 5] }))
+const sparkStyle = (p: { a: number; d: number; dl: number; c: string }) =>
+  ({ "--a": `${p.a}deg`, "--d": `${p.d}px`, "--dl": `${p.dl}s`, "--c": p.c }) as React.CSSProperties
 
 const PAD = 14 // canvas bleed around the pill, for shadows and ripples
 
@@ -112,10 +123,34 @@ const NIMBUS_CSS = `
 @keyframes nvDoor{0%{fill:transparent}30%{fill:#FFE9A8}100%{fill:rgba(255,193,94,.6)}}
 .nv-ico[data-fx="wave"] svg{animation:nvWave .9s ease-in-out both;transform-origin:50% 92%}
 @keyframes nvWave{0%{transform:none}20%{transform:rotate(-15deg)}40%{transform:rotate(12deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(4deg)}100%{transform:translateY(-1px) scale(1.08)}}
+.nv-diya{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;z-index:-1;pointer-events:none;
+  background:radial-gradient(circle,rgba(255,190,80,.55),rgba(255,140,40,.18) 45%,rgba(255,140,40,0) 70%);animation:nvDiya 2.6s ease-in-out infinite}
+@keyframes nvDiya{0%,100%{opacity:.75;transform:scale(1)}30%{opacity:1;transform:scale(1.12)}45%{opacity:.8;transform:scale(.96)}70%{opacity:.95;transform:scale(1.06)}}
+.nv-sparks,.nv-burst{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none}
+.nv-spark{position:absolute;left:-1px;top:-3px;width:2px;height:6px;border-radius:2px;background:var(--c);box-shadow:0 0 4px var(--c);opacity:0;
+  animation:nvAnar 3.6s cubic-bezier(.2,.7,.3,1) var(--dl) infinite}
+.nimbus-item:hover .nv-spark{animation-duration:1.5s}
+@keyframes nvAnar{0%{opacity:0;transform:translateY(0) rotate(var(--a)) translateY(-3px) scale(1)}
+  5%{opacity:1}
+  26%{opacity:1;transform:translateY(0) rotate(var(--a)) translateY(calc(-1*var(--d))) scale(.9)}
+  40%,100%{opacity:0;transform:translateY(6px) rotate(var(--a)) translateY(calc(-1.15*var(--d))) scale(.2)}}
+.nv-burst i{position:absolute;left:-2px;top:-2px;width:4px;height:4px;border-radius:50%;background:var(--c);box-shadow:0 0 6px var(--c);opacity:0;
+  animation:nvBurst .9s cubic-bezier(.15,.8,.3,1) var(--dl) both}
+@keyframes nvBurst{0%{opacity:1;transform:rotate(var(--a)) translateY(0) scale(1.2)}55%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) translateY(calc(-1*var(--d))) scale(.3)}}
+.nimbus-item[data-festive] .nimbus-label{background:linear-gradient(100deg,var(--n-fg-soft) 38%,#FFB547 46%,#E0561F 50%,#FFB547 54%,var(--n-fg-soft) 62%);background-size:300% 100%;
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:nvShine 4.2s ease-in-out infinite}
+.nimbus-item[data-festive]:hover .nimbus-label,.nimbus-item[data-festive][aria-current="page"] .nimbus-label{
+  background-image:linear-gradient(100deg,var(--n-fg) 38%,#FFB547 46%,#E0561F 50%,#FFB547 54%,var(--n-fg) 62%)}
+@keyframes nvShine{0%,35%{background-position:100% 0}75%,100%{background-position:0 0}}
+.nv-new{position:absolute;top:-8px;right:-6px;padding:2px 6px 2px;border-radius:999px;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;line-height:1.2;color:#fff;
+  background:linear-gradient(135deg,#FFB547,#E0561F 60%,#C2185B);box-shadow:0 2px 8px -2px rgba(224,86,31,.7),inset 0 1px 0 rgba(255,255,255,.45);
+  pointer-events:none;animation:nvNew 2.2s ease-in-out infinite;transform-origin:30% 100%}
+@keyframes nvNew{0%,100%{transform:rotate(-4deg) scale(1)}50%{transform:rotate(3deg) scale(1.08);box-shadow:0 2px 14px -1px rgba(255,170,60,.95),inset 0 1px 0 rgba(255,255,255,.45)}}
 .nimbus-nav[data-compact="true"] .nimbus-item{padding:0 13px}
 .nimbus-nav[data-compact="true"] .nimbus-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (max-width:520px){.nimbus-nav:not([data-compact="false"]) .nimbus-item{padding:0 13px}.nimbus-nav:not([data-compact="false"]) .nimbus-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
-@media (prefers-reduced-motion:reduce){.nv-ico svg,.nv-ico::before,.nv-ico::after,.nv-door{animation:none!important;transition:none}}
+@media (prefers-reduced-motion:reduce){.nv-ico svg,.nv-ico::before,.nv-ico::after,.nv-door,.nv-diya,.nv-new,.nimbus-item[data-festive] .nimbus-label{animation:none!important;transition:none}
+  .nv-sparks,.nv-burst{display:none}}
 `
 
 /* ---------- the water shader ---------- */
@@ -569,6 +604,7 @@ export function LiquidNavbar({
           ref: (el: HTMLElement | null) => { itemRefs.current[i] = el },
           className: "nimbus-item",
           "aria-current": i === current ? ("page" as const) : undefined,
+          "data-festive": it.festive ? "" : undefined,
           onClick: (e: React.MouseEvent) => {
             // let a router handle plain clicks on links; modified clicks still open a new tab
             if (it.href && onChange && e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) e.preventDefault()
@@ -579,10 +615,22 @@ export function LiquidNavbar({
           <>
             {it.icon && (
               <span className="nv-ico" key={playing ? fx.n : 0} data-fx={playing ? kind : undefined} ref={(el) => { iconRefs.current[i] = el }}>
+                {it.festive && <span className="nv-diya" aria-hidden="true" />}
                 {it.icon}
+                {it.festive && (
+                  <span className="nv-sparks" aria-hidden="true">
+                    {ANAR.map((p, j) => <span key={j} className="nv-spark" style={sparkStyle(p)} />)}
+                  </span>
+                )}
+                {it.festive && playing && (
+                  <span className="nv-burst" aria-hidden="true">
+                    {BURST.map((p, j) => <i key={j} style={sparkStyle(p)} />)}
+                  </span>
+                )}
               </span>
             )}
             <span className="nimbus-label">{it.label}</span>
+            {it.badge && <span className="nv-new" aria-hidden="true">{it.badge}</span>}
           </>
         )
         return it.href ? (

@@ -117,7 +117,9 @@ export const Navbar = () => {
   };
   const liquidItems: LiquidNavItem[] = navLinks.map((link) => {
     const { icon: Icon, fx } = NAV_ICONS[link.path];
-    return { label: link.name, href: link.path, fx, icon: <Icon size={18} strokeWidth={1.8} aria-hidden /> };
+    // Itineraries is the newest feature, so it gets the Diwali sparkle and a "New" sticker
+    const festive = link.path === '/itineraries';
+    return { label: link.name, href: link.path, fx, festive, badge: festive ? 'New' : undefined, icon: <Icon size={18} strokeWidth={1.8} aria-hidden /> };
   });
   const activeIndex = navLinks.findIndex((link) => location.pathname.startsWith(link.path));
 
@@ -547,7 +549,14 @@ export const Navbar = () => {
                     to={link.path}
                     className="flex items-center justify-between py-3 border-b border-line font-display text-[2rem] leading-tight text-ink"
                   >
-                    {link.name}
+                    <span className="flex items-center gap-3">
+                      {link.name}
+                      {link.path === '/itineraries' && (
+                        <span className="rounded-full bg-gradient-to-br from-[#FFB547] via-[#E0561F] to-[#C2185B] px-2.5 py-1 font-sans text-[11px] font-extrabold uppercase tracking-wider text-white shadow-[0_2px_10px_-2px_rgba(224,86,31,0.7)] motion-safe:animate-pulse">
+                          New
+                        </span>
+                      )}
+                    </span>
                     <ArrowUpRight className="w-6 h-6 text-accent" />
                   </Link>
                 </motion.li>
