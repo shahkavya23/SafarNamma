@@ -317,7 +317,7 @@ export const ItineraryDetailsPage = () => {
                     {/* Stop Card */}
                     <div
                       onClick={() => setActiveStopId(isActive ? null : stop.id)}
-                      className={`group/stop bg-paper rounded-2xl p-5 border transition-colors duration-200 cursor-pointer ${
+                      className={`group/stop bg-paper rounded-2xl p-4 sm:p-5 border transition-colors duration-200 cursor-pointer ${
                         isActive ? 'border-accent' : 'border-line hover:border-ink/30'
                       }`}
                     >
@@ -339,7 +339,7 @@ export const ItineraryDetailsPage = () => {
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <div>
+                            <div className="min-w-0">
                               <span className="text-[10px] font-mono uppercase tracking-wider text-muted font-semibold">
                                 Stop #{index + 1} · {dest?.category || 'Destination'}
                               </span>
@@ -364,7 +364,7 @@ export const ItineraryDetailsPage = () => {
                                     <MapPinOff className="w-2.5 h-2.5" /> Not on map
                                   </span>
                                 ))}
-                              <h3 className="font-display text-xl text-ink hover:text-accent transition-colors">
+                              <h3 className="font-display text-lg sm:text-xl leading-snug text-ink hover:text-accent transition-colors break-words">
                                 {dest ? (
                                   <Link
                                     to={`/places/${dest.id}`}
@@ -384,7 +384,7 @@ export const ItineraryDetailsPage = () => {
                                   e.stopPropagation();
                                   handleDeleteStop(stop.id);
                                 }}
-                                className="p-1.5 rounded-full hover:bg-[#FDF3F1] text-muted hover:text-[#B42318] transition-colors"
+                                className="shrink-0 -mr-1.5 -mt-1 p-1.5 rounded-full hover:bg-[#FDF3F1] text-muted hover:text-[#B42318] transition-colors"
                                 title="Remove stop"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -425,7 +425,7 @@ export const ItineraryDetailsPage = () => {
                                 e.stopPropagation();
                                 setActiveStopId(isActive ? null : stop.id);
                               }}
-                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-ink text-sand hover:bg-ink/85 transition-colors"
+                              className="inline-flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-full bg-ink text-sand hover:bg-ink/85 transition-colors"
                               aria-expanded={isActive}
                             >
                               {isActive ? 'Less info' : 'More info'}
@@ -437,7 +437,7 @@ export const ItineraryDetailsPage = () => {
                               <Link
                                 to={`/places/${dest.id}`}
                                 onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-line bg-paper text-ink hover:border-accent hover:text-accent transition-colors"
+                                className="inline-flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-full border border-line bg-paper text-ink hover:border-accent hover:text-accent transition-colors"
                               >
                                 <ArrowUpRight className="w-3.5 h-3.5" /> Place details
                               </Link>
@@ -448,7 +448,7 @@ export const ItineraryDetailsPage = () => {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-line bg-paper text-ink hover:border-accent hover:text-accent transition-colors"
+                                className="inline-flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-full border border-line bg-paper text-ink hover:border-accent hover:text-accent transition-colors"
                               >
                                 <Navigation className="w-3.5 h-3.5" /> Directions
                               </a>
@@ -459,17 +459,17 @@ export const ItineraryDetailsPage = () => {
 
                       {/* Transit Leg Indicator to Next Stop */}
                       {!isLast && (stop.transport_mode || isAdmin) && (
-                        <div className="mt-4 pt-3 border-t border-line/60 flex items-center gap-2 text-xs text-muted">
-                          <span className="p-1 rounded-md bg-stone text-accent transition-transform duration-500 group-hover/stop:translate-x-1">
+                        <div className="mt-4 pt-3 border-t border-line/60 flex items-center gap-2 text-xs text-muted min-w-0">
+                          <span className="shrink-0 p-1 rounded-md bg-stone text-accent transition-transform duration-500 group-hover/stop:translate-x-1">
                             {getTransportIcon(stop.transport_mode)}
                           </span>
                           {isAdmin ? (
-                            <label className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                              Next Leg:
+                            <label className="flex flex-1 min-w-0 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <span className="shrink-0 whitespace-nowrap">Next leg:</span>
                               <select
                                 value={stop.transport_mode || ''}
                                 onChange={(e) => handleChangeTransport(stop.id, e.target.value)}
-                                className="bg-sand/40 border border-line rounded-full px-2.5 py-1 text-xs font-semibold text-ink focus:outline-none focus:border-accent cursor-pointer"
+                                className="min-w-0 flex-1 sm:flex-none sm:max-w-md truncate bg-sand/40 border border-line rounded-full px-2.5 py-1 text-xs font-semibold text-ink focus:outline-none focus:border-accent cursor-pointer"
                                 aria-label="Transit to next stop"
                               >
                                 {!stop.transport_mode && <option value="" disabled>Choose…</option>}
@@ -482,8 +482,8 @@ export const ItineraryDetailsPage = () => {
                               </select>
                             </label>
                           ) : (
-                            <span>
-                              Next Leg:{' '}
+                            <span className="min-w-0 leading-relaxed">
+                              Next leg:{' '}
                               <strong className="text-ink font-semibold">{stop.transport_mode}</strong>
                             </span>
                           )}
