@@ -1,6 +1,7 @@
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { Lock, Users } from 'lucide-react';
 import type { Itinerary, ItineraryStop } from '../../types';
+import { RouteSchedule, parseSchedule } from './RouteSchedule';
 
 /** Old rows can hold "-1" or "0" from before the backend validated it; plain numbers read as hours. */
 export const readableDuration = (raw?: string | null) => {
@@ -27,6 +28,7 @@ export const ItineraryHero = ({ itinerary, stops, onStartGroup, isLocked = false
   const count = isLocked ? itinerary.stop_count : stops.length;
   const stopCount = `${count} ${count === 1 ? 'stop' : 'stops'}`;
   const words = itinerary.title.split(/\s+/);
+  const schedule = parseSchedule(itinerary.description);
 
   const container: Variants = {
     hidden: {},
@@ -66,10 +68,16 @@ export const ItineraryHero = ({ itinerary, stops, onStartGroup, isLocked = false
           ))}
         </h1>
 
-        {itinerary.description && (
-          <motion.p variants={rise} className="text-muted text-base leading-relaxed whitespace-pre-line mt-3 max-w-2xl">
-            {itinerary.description}
-          </motion.p>
+        {schedule ? (
+          <motion.div variants={rise} className="mt-6">
+            <RouteSchedule schedule={schedule} />
+          </motion.div>
+        ) : (
+          itinerary.description && (
+            <motion.p variants={rise} className="text-ink/80 text-base leading-relaxed whitespace-pre-line mt-3 max-w-2xl">
+              {itinerary.description}
+            </motion.p>
+          )
         )}
       </div>
 
