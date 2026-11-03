@@ -36,6 +36,12 @@ const CAR_SVG = `
 
 const SECONDS_PER_LEG = 2.8; // average drive time between two stops
 const END_PAUSE = 1.2; // seconds parked at the last stop before looping
+// Map fit padding: extra room on top for the 38px pins, on the right for the zoom control
+const FIT_PAD_TOP_LEFT: [number, number] = [40, 64];
+const FIT_PAD_BOTTOM_RIGHT: [number, number] = [56, 40];
+const FIT_MAX_ZOOM = 15; // whole-route view
+const FOCUS_MAX_ZOOM = 16; // selected stop and its neighbours
+const PIN_SPACING = 34; // px between stop pins that would otherwise overlap
 
 export const getStopCoords = (stop: ItineraryStop): [number, number] | null => {
   const dest = stop.destination;
@@ -65,6 +71,7 @@ export const ItineraryMap: React.FC<ItineraryMapProps> = ({
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const polylineRef = useRef<any>(null);
+  const spreadHandlerRef = useRef<(() => void) | null>(null);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
 
   // Dynamic injection of Leaflet CSS & JS
@@ -120,6 +127,9 @@ export const ItineraryMap: React.FC<ItineraryMapProps> = ({
         center: initialCenter,
         zoom: 13,
         zoomControl: false,
+        // Quarter-level zoom so fitBounds can fill the map instead of rounding a whole level out
+        zoomSnap: 0.25,
+        zoomDelta: 0.5,
       });
 
       // OSM tiles, softened and warmed to the sand palette via the .sn-map-tiles filter
@@ -218,6 +228,32 @@ export const ItineraryMap: React.FC<ItineraryMapProps> = ({
       markersRef.current.push(marker);
     });
 
+    // Stops that sit close together (e.g. two places in the same neighbourhood) would stack
+    // their pins exactly on top of each other at city zoom, hiding one number. Fan any pins
+    // that overlap on screen out side by side, recomputed whenever the zoom changes.
+    const spreadOverlappingPins = () => {
+      const zoom = map.getZoom();
+      const groups: { origin: any; members: any[] }[] = [];
+      markersRef.current.forEach((m) => {
+        const pt = map.project(m.getLatLng(), zoom);
+        const group = groups.find((g) => g.origin.distanceTo(pt) < PIN_SPACING);
+        if (group) group.members.push(m);
+        else groups.push({ origin: pt, members: [m] });
+      });
+      groups.forEach(({ members }) => {
+        members.forEach((m, i) => {
+          const pin = m.getElement()?.firstElementChild as HTMLElement | null;
+          if (!pin) return;
+          const dx = (i - (members.length - 1) / 2) * PIN_SPACING;
+          // `translate` (not `transform`) so the pin's hover scale keeps working
+          pin.style.translate = dx ? `${dx}px 0` : '';
+        });
+      });
+    };
+    if (spreadHandlerRef.current) map.off('zoomend', spreadHandlerRef.current);
+    spreadHandlerRef.current = spreadOverlappingPins;
+    map.on('zoomend', spreadOverlappingPins);
+
     // Draw route connecting polyline
     if (latLngs.length > 1) {
       // White casing under a solid coral line so the route reads cleanly on any terrain
@@ -228,19 +264,22 @@ export const ItineraryMap: React.FC<ItineraryMapProps> = ({
       polylineRef.current = polyline;
     }
 
-    // Auto-fit bounds smoothly so all pins are centered in view!
-    if (latLngs.length > 0) {
-      if (latLngs.length === 1) {
-        map.setView(latLngs[0], 14, { animate: true });
-      } else {
-        const bounds = L.latLngBounds(latLngs);
-        map.fitBounds(bounds, {
-          padding: [50, 50],
-          maxZoom: 15,
-          animate: true,
-        });
-      }
+    // Fit the view: the whole route, or with a stop selected, that stop and its neighbours
+    // so the legs either side of it (often hidden under the pins at overview zoom) read clearly
+    if (latLngs.length === 1) {
+      map.setView(latLngs[0], 14, { animate: true });
+    } else {
+      const activeIdx = stopsWithCoords.findIndex(({ stop }) => stop.id === activeStopId);
+      const focus = activeIdx === -1 ? latLngs : latLngs.slice(Math.max(0, activeIdx - 1), activeIdx + 2);
+      map.fitBounds(L.latLngBounds(focus), {
+        paddingTopLeft: FIT_PAD_TOP_LEFT,
+        paddingBottomRight: FIT_PAD_BOTTOM_RIGHT,
+        maxZoom: activeIdx === -1 ? FIT_MAX_ZOOM : FOCUS_MAX_ZOOM,
+        animate: true,
+      });
     }
+
+    spreadOverlappingPins();
 
     setTimeout(() => {
       map.invalidateSize();
@@ -303,7 +342,8 @@ export const ItineraryMap: React.FC<ItineraryMapProps> = ({
 
     // The drive time holds at the zoom that fits the whole route. Zoomed in, the same
     // distance spans more of the screen, so the jeep slows to keep its on-screen speed.
-    const fitZoom = Math.min(15, map.getBoundsZoom(L.latLngBounds(route), false, L.point(100, 100)));
+    const fitPad = L.point(FIT_PAD_TOP_LEFT).add(FIT_PAD_BOTTOM_RIGHT);
+    const fitZoom = Math.min(FIT_MAX_ZOOM, map.getBoundsZoom(L.latLngBounds(route), false, fitPad));
     const fitSpeed = total / driveTime;
 
     let frame = 0;
