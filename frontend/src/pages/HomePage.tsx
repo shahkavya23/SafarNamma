@@ -24,7 +24,6 @@ import { LiquidMetalButton } from '../components/ui/liquid-metal-button';
 import { Toran } from '../components/festive/Toran';
 import { Embers } from '../components/festive/Embers';
 import { Rangoli } from '../components/festive/Rangoli';
-import { DiwaliRibbon } from '../components/festive/DiwaliRibbon';
 import { isDiwaliSeason, isDiwaliTrip } from '../utils/festive';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -581,12 +580,6 @@ const ActiveGroups: React.FC<{ groups: Group[]; boardGroups: Group[]; places: Pl
         </Link>
       </Reveal>
     </div>
-
-    {festive && (
-      <Reveal>
-        <DiwaliRibbon groups={groups} loaded={loaded} />
-      </Reveal>
-    )}
 
     <Reveal>
       <DepartureBoard groups={boardGroups} places={places} loaded={loaded} tagFor={festive ? diwaliTag : undefined} />
