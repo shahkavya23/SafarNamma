@@ -135,7 +135,10 @@ export const ItinerariesHeroCopy = ({ itineraries, ready, activeId, onSelect, on
           <p className="max-w-xl text-sm sm:text-base text-muted leading-snug [@media(max-height:560px)]:hidden">{note}</p>
         )}
 
-        <div className={`flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 ${ready ? '' : 'min-h-11'}`}>
+        {/* Phones: one row that swipes sideways, edge to edge, so the hero never grows past the screen.
+            The padding leaves room for the chips' shadows inside the scroller. */}
+        <div className="self-stretch -mx-5 sm:mx-0 overflow-x-auto no-scrollbar sm:overflow-visible">
+        <div className={`flex flex-nowrap sm:flex-wrap items-center sm:justify-center gap-2 sm:gap-2.5 w-max sm:w-auto mx-auto px-5 sm:px-0 pt-1 pb-4 sm:py-0 ${ready ? '' : 'min-h-11'}`}>
           {itineraries.slice(0, MAX_CHIPS).map((it, i) => {
             const isActive = it.id === activeId;
             return (
@@ -149,7 +152,7 @@ export const ItinerariesHeroCopy = ({ itineraries, ready, activeId, onSelect, on
                 whileHover={reduced ? undefined : { y: -3 }}
                 whileTap={reduced ? undefined : { scale: 0.96 }}
                 aria-current={isActive || undefined}
-                className={`inline-flex items-center gap-2 h-11 pl-1.5 pr-4 rounded-full bg-paper border text-sm font-semibold text-ink shadow-[0_10px_24px_-12px_rgba(14,31,34,0.5)] transition-colors hover:border-accent hover:text-accent-text ${
+                className={`shrink-0 inline-flex items-center gap-2 h-11 pl-1.5 pr-4 rounded-full bg-paper border text-sm font-semibold text-ink shadow-[0_10px_24px_-12px_rgba(14,31,34,0.5)] transition-colors hover:border-accent hover:text-accent-text ${
                   isActive ? 'border-accent' : 'border-line'
                 }`}
               >
@@ -173,13 +176,15 @@ export const ItinerariesHeroCopy = ({ itineraries, ready, activeId, onSelect, on
             <button
               type="button"
               onClick={onSeeAll}
-              className="inline-flex items-center h-11 px-4 rounded-full bg-paper border border-line text-sm font-semibold text-accent-text shadow-[0_10px_24px_-12px_rgba(14,31,34,0.5)] transition-colors hover:border-accent"
+              className="shrink-0 whitespace-nowrap inline-flex items-center h-11 px-4 rounded-full bg-paper border border-line text-sm font-semibold text-accent-text shadow-[0_10px_24px_-12px_rgba(14,31,34,0.5)] transition-colors hover:border-accent"
             >
               +{routes - MAX_CHIPS} more
             </button>
           )}
-          {ready && action}
         </div>
+        </div>
+        {/* On its own line, so it's never scrolled out of sight with the chips */}
+        {ready && action}
       </motion.div>
     </div>
   );
