@@ -10,6 +10,7 @@ import { CreateItineraryModal } from '../components/itineraries/CreateItineraryM
 import { ItinerariesHeroCopy } from '../components/itineraries/ItinerariesHeroCopy';
 import { ItineraryCard, ITINERARY_CARD_SIZE, itineraryCardWidth } from '../components/itineraries/ItineraryCard';
 import { RouteIndex } from '../components/itineraries/RouteIndex';
+import { TravelQuoteLoader } from '../components/itineraries/TravelQuoteLoader';
 import { FREE_RULE } from '../components/itineraries/unlock';
 import CarouselStacked from '../components/ui/carousel-stacked';
 import PerspectiveTunnelHero, { type TunnelItem } from '../components/ui/perspective-tunnel-hero';
@@ -234,12 +235,7 @@ export const ItinerariesPage = () => {
         transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
       >
       {loadState === 'loading' || loadState === 'waking' ? (
-        <div className="py-24 text-center">
-          <div className="w-8 h-8 rounded-full border-2 border-accent border-t-transparent animate-spin mx-auto mb-4" />
-          <p className="text-sm font-semibold text-ink">
-            {loadState === 'waking' ? 'Waking up the server, this can take up to a minute…' : 'Loading curated routes…'}
-          </p>
-        </div>
+        <TravelQuoteLoader waking={loadState === 'waking'} />
       ) : loadState === 'failed' ? (
         <div className="py-20 text-center bg-paper/60 border border-line rounded-3xl p-8 max-w-md mx-auto">
           <div className="w-14 h-14 rounded-2xl bg-accent-soft text-accent flex items-center justify-center mx-auto mb-4">
