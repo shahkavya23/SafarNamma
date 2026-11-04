@@ -10,6 +10,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description"
     content="SafarNamma — Discover hidden gems, scenic road trips, and weekend escapes around Bengaluru. Your journey begins here." />
+  <link rel="canonical" href="https://safarnamma.vercel.app/" />
+
+  <!-- Social sharing previews -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SafarNamma" />
+  <meta property="og:title" content="SafarNamma — Your Journey Begins" />
+  <meta property="og:description"
+    content="Discover hidden gems, scenic road trips and weekend escapes around Bengaluru, and join a small group heading out this weekend." />
+  <meta property="og:url" content="https://safarnamma.vercel.app/" />
+  <meta property="og:image" content="https://safarnamma.vercel.app/safarnamma-logo.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SafarNamma — Your Journey Begins" />
+  <meta name="twitter:description"
+    content="Discover hidden gems, scenic road trips and weekend escapes around Bengaluru." />
+  <meta name="twitter:image" content="https://safarnamma.vercel.app/safarnamma-logo.png" />
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "SafarNamma",
+      "url": "https://safarnamma.vercel.app/",
+      "description": "Discover hidden gems, scenic road trips and weekend escapes around Bengaluru."
+    }
+  </script>
   <meta name="theme-color" content="#F2ECE3" />
   <meta name="google-site-verification" content="qDDhQsoUXLHQWZQN8jxMuj-PcPwUScCMGcLZYTSOhB4" />
 
@@ -24,7 +48,37 @@
 </head>
 
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <!-- Crawlable fallback: React replaces everything inside #root as soon as the app mounts,
+         so visitors with JavaScript never see this. Search engines and link previews do. -->
+    <main style="max-width:720px;margin:0 auto;padding:48px 20px;font-family:Manrope,system-ui,sans-serif;color:#2b2420;background:#F2ECE3;line-height:1.6">
+      <h1>SafarNamma — Discover hidden gems around Bengaluru</h1>
+      <p>SafarNamma is a travel community for people in Bengaluru who want to get out of the city more often.
+        Find treks, waterfalls, temples, coffee estates and scenic road trips that are a short drive away, then join a
+        small group heading out this weekend or host a trip of your own.</p>
+      <nav aria-label="Main">
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/explore">Explore places near Bengaluru</a></li>
+          <li><a href="/register">Create a free account</a></li>
+          <li><a href="/login">Log in</a></li>
+        </ul>
+      </nav>
+      <h2>Explore places worth the drive</h2>
+      <p>Browse a growing collection of weekend escapes around Bengaluru: moonlit treks to granite peaks with a sea of
+        clouds at sunrise, plantation waterfalls in Coorg after the monsoon, the misty hills of Chikmagalur, carved stone
+        temples best seen in early morning light, and city spots like Commercial Street. Every place has photos, what to
+        expect and how to get there.</p>
+      <h2>Join or host a group trip</h2>
+      <p>Browse trips by date, budget and seats left. Every trip shows where you meet and what it costs, so there are no
+        surprises. Ask to join, and once the host approves your request you get the group's WhatsApp or Telegram link.
+        Want to be the one who gets the group together? Hosting a trip takes about two minutes.</p>
+      <h2>Plan with ready-made itineraries</h2>
+      <p>Follow curated route blueprints with stops laid out in order on a map, from breakfast spots to viewpoints, so
+        your day out is planned before you leave home.</p>
+      <p><a href="/explore">Start exploring</a> or <a href="/register">sign up</a> to join your first trip.</p>
+    </main>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 
