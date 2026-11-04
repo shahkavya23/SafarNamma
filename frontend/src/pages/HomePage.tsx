@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll } from 'motion/react';
+import { AnimatePresence, motion, useInView, useMotionValueEvent, useReducedMotion, useScroll } from 'motion/react';
 import { Search, ArrowRight, MapPin, Users, Compass, ShieldCheck, Camera, Plus, Sparkles, ArrowUpRight } from 'lucide-react';
 import { placesApi, groupsApi } from '../api/client';
 import type { Place, Group } from '../types';
@@ -17,6 +17,7 @@ import { HeroIntro } from '../components/home/HeroIntro';
 import { INTRO_POP, useIntroOnce } from '../hooks/useIntroOnce';
 import { TripActivityToast } from '../components/home/TripActivityToast';
 import { TripNudgeBar } from '../components/home/TripNudgeBar';
+import { ItineraryTeaser } from '../components/home/ItineraryTeaser';
 import { demoTrips } from '../mock/demoTrips';
 import { categoryIcon } from '../utils/categories';
 import { StoryPhoneMock } from '../components/groups/StoryPromo';
@@ -597,9 +598,10 @@ const FLOW = [
   { icon: Camera, label: 'Story made for you' },
 ];
 
-const GroupFlow: React.FC = () => {
+const GroupFlow: React.FC<{ onRead?: () => void }> = ({ onRead }) => {
   const reduced = useReducedMotion();
   const routeRef = useRef<HTMLDivElement>(null);
+  const routeInView = useInView(routeRef, { amount: 0.6 });
   // The route draws itself as the band scrolls into view, lighting each step as the line reaches it
   const { scrollYProgress } = useScroll({ target: routeRef, offset: ['start 0.9', 'start 0.35'] });
   const [lit, setLit] = useState(reduced ? FLOW.length : 0);
@@ -607,6 +609,13 @@ const GroupFlow: React.FC = () => {
     if (reduced) return;
     setLit(v <= 0 ? 0 : Math.min(FLOW.length, Math.floor(v * (FLOW.length - 1) + 0.001) + 1));
   });
+  // Every step lit and the row on screen: the visitor has read how a trip works (fires once)
+  const readFired = useRef(false);
+  useEffect(() => {
+    if (readFired.current || lit < FLOW.length || !routeInView) return;
+    readFired.current = true;
+    onRead?.();
+  }, [lit, routeInView, onRead]);
 
   return (
     <section className="px-3 sm:px-5 pb-20 lg:pb-24">
@@ -864,6 +873,9 @@ export const HomePage: React.FC = () => {
   const marqueeNames = useMemo(() => allPlaces.slice(0, 14).map((p) => p.name), [allPlaces]);
   // Decided once per visit, so the festive layer never flickers mid-page
   const [festive] = useState(() => isDiwaliSeason());
+  // Arms the Itineraries teaser once the "Don't go alone" steps have been read
+  const [flowRead, setFlowRead] = useState(false);
+  const handleFlowRead = useCallback(() => setFlowRead(true), []);
 
   return (
     <div className="flex flex-col w-full bg-sand min-h-screen">
@@ -879,12 +891,13 @@ export const HomePage: React.FC = () => {
       />
       {/* Trips are the USP: the live board, then how a trip works */}
       <ActiveGroups groups={activeGroups} boardGroups={boardGroups} places={allPlaces} loaded={groupsLoaded} festive={festive} />
-      <GroupFlow />
+      <GroupFlow onRead={handleFlowRead} />
       <FeaturedPlaces places={featuredPlaces} allPlaces={allPlaces} total={allPlaces.length || cachedCount} festive={festive} trips={upcoming} />
       <NameMarquee names={marqueeNames} />
       {/* Nudges that keep a trip one tap away */}
       <TripActivityToast trips={boardUpcoming} places={allPlaces} />
       <TripNudgeBar trips={upcoming} />
+      <ItineraryTeaser armed={flowRead} />
     </div>
   );
 };
