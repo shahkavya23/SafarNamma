@@ -37,7 +37,7 @@ export const CATEGORY_THEMES: Record<string, CategoryTheme> = {
   // The site's own Hampi sandstone
   [ALL_KEY]: {
     word: 'weekend', sand: '#F2ECE3', paper: '#FBF8F3', stone: '#E7DED1', ink: '#102A2E', body: '#3E4F4F', muted: '#5E6A68',
-    accent: '#E0561F', accentText: '#B8461A', accentSoft: '#F7DCCB', display: FRAUNCES, photo: 'chikmagalurHills',
+    accent: '#E0561F', accentText: '#B8461A', accentSoft: '#F7DCCB', display: FRAUNCES, photo: 'skandagiri', ownPhoto: true,
   },
   Nature: {
     word: 'trail', sand: '#E4ECE3', paper: '#F4F8F2', stone: '#D3DFD1', ink: '#0F2A1C', body: '#2F4A3B', muted: '#4D6457',
