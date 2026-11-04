@@ -340,7 +340,7 @@ export const ItineraryDetailsPage = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <span className="text-[10px] font-mono uppercase tracking-wider text-muted font-semibold">
+                              <span className="inline-flex items-center text-[10px] font-mono uppercase tracking-wider font-bold text-accent-text bg-accent-soft ring-1 ring-accent/30 rounded-full px-2 py-0.5 align-middle">
                                 Stop #{index + 1} · {dest?.category || 'Destination'}
                               </span>
                               {!!dest?.rating && dest.rating > 0 && (
