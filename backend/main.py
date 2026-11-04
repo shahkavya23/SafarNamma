@@ -1286,9 +1286,9 @@ def delete_notification(notification_id: int, db: Session = Depends(get_db), use
 # once they host a trip on it: one trip, one route. Admins can open every route.
 MAX_FEATURED_ITINERARIES = 3
 
-# The redesigned site (with free and locked routes) is only shown to admins for now, so itineraries
-# stay admin-only. Set this to False when the redesign goes public for everyone.
-ITINERARIES_ADMIN_ONLY = True
+# Itineraries are open to every signed-in user (locked routes are sent as teasers).
+# Set this to True to make them admin-only again.
+ITINERARIES_ADMIN_ONLY = False
 
 
 def require_itinerary_viewer(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:

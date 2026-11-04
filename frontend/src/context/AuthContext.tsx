@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User } from '../types';
 import { userApi, TOKEN_KEY, AUTH_EXPIRED_EVENT } from '../api/client';
-import { reloadIfSiteChanged } from '../siteVersion';
 
 const SESSION_TOKEN_PREFIX = 'sn1.';
 
@@ -114,14 +113,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     setUser(sanitizedUser);
     localStorage.setItem('roamlocal_user', JSON.stringify(sanitizedUser));
-    reloadIfSiteChanged();
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('roamlocal_user');
     localStorage.removeItem(TOKEN_KEY);
-    reloadIfSiteChanged();
   };
 
   // Backend rejected the session (expired or invalid): sign out so the user can log in again
