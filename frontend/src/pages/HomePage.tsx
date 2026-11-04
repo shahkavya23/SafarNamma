@@ -399,6 +399,22 @@ const Hero: React.FC<{
   // "Host a trip" gives one small pop right after the seats fill (or as the intro's car parks)
   const hostPop = groupsLoaded && !reduced ? Math.max(seatsPop, intro ? INTRO_POP : 0) : 0;
   const navigate = useNavigate();
+  // The metal button draws at a fixed pixel size; on phones it fills its half of the button row instead
+  const [hostWidth, setHostWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el) return;
+    const mq = window.matchMedia('(max-width: 639px)');
+    const measure = () => setHostWidth(mq.matches ? Math.round(el.getBoundingClientRect().width) : null);
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    mq.addEventListener('change', measure);
+    measure();
+    return () => {
+      ro.disconnect();
+      mq.removeEventListener('change', measure);
+    };
+  }, []);
   // Shuffled once when the places arrive, so each visit gets a different mix
   const heroTiles = useMemo(() => buildHeroTiles(places), [places]);
 
@@ -450,25 +466,26 @@ const Hero: React.FC<{
             Join a small group heading out this weekend, or host your own. Treks, waterfalls and road trips, all a short drive away.
           </p>
 
-          <div className="flex flex-wrap gap-3 mt-8 animate-fade-up delay-600">
-            <Link to="/groups" className="btn-accent group !py-4 !px-7 !text-base">
+          {/* Phones: two equal halves on one row. Wider: natural widths side by side */}
+          <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:gap-3 mt-8 animate-fade-up delay-600">
+            <Link to="/groups" className="btn-accent group h-[52px] sm:h-14 !px-3 sm:!px-7 !py-0 !text-[15px] sm:!text-base whitespace-nowrap">
               Find a trip <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </Link>
             {/* Remounts once trips load, so its pop lands right after the seats fill (or as the intro's car parks) */}
-            <span ref={hostRef} className="inline-flex">
+            <span ref={hostRef} className="flex min-w-0 sm:inline-flex">
               <motion.span
                 key={groupsLoaded ? 'loaded' : 'loading'}
-                className="inline-flex"
+                className="flex w-full sm:inline-flex sm:w-auto"
                 animate={hostPop ? { scale: [1, 1.07, 1] } : undefined}
                 transition={hostPop ? { duration: 0.6, delay: hostPop, ease: EASE } : undefined}
               >
-                {/* Same 56px height as "Find a trip" beside it */}
+                {/* Same height as "Find a trip" beside it: 52px on phones, 56px wider */}
                 <LiquidMetalButton
                   label="Host a trip"
                   icon={<Plus className="w-4 h-4" />}
-                  width={176}
-                  height={56}
-                  fontSize={16}
+                  width={hostWidth ?? 176}
+                  height={hostWidth ? 52 : 56}
+                  fontSize={hostWidth ? 15 : 16}
                   onClick={() => navigate('/groups?host=1')}
                 />
               </motion.span>
