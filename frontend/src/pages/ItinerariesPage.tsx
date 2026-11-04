@@ -197,6 +197,20 @@ export const ItinerariesPage = () => {
     seeRoutes();
   };
 
+  // The deck opens on the first free pick with the second to its left and the third to its right.
+  // The deck loops, so its last card is the one on the front card's left. Only the deck is
+  // reordered: the route list and hero keep the server's order, and indices map between the two.
+  const deckOrder = useMemo(() => {
+    const all = itineraries.map((_, i) => i);
+    const free = all.filter((i) => itineraries[i].is_featured);
+    if (itineraries.length < 3 || free.length < 2) return all;
+    const [center, left, ...right] = free;
+    const rest = all.filter((i) => !itineraries[i].is_featured);
+    return [center, ...right, ...rest, left];
+  }, [itineraries]);
+  const deckItems = useMemo(() => deckOrder.map((i) => itineraries[i]), [deckOrder, itineraries]);
+  const deckActiveIndex = Math.max(0, deckOrder.indexOf(activeIndex));
+
   const ready = loadState === 'ready';
   const tunnelItems = useMemo(
     () => buildTunnelItems(itineraries, selectRoute, seeRoutes),
@@ -273,12 +287,12 @@ export const ItinerariesPage = () => {
       ) : (
         <>
           <CarouselStacked
-            items={itineraries}
+            items={deckItems}
             getKey={(it) => it.id}
             cardClassName={ITINERARY_CARD_SIZE}
             cardWidth={itineraryCardWidth}
-            activeIndex={activeIndex}
-            onActiveChange={setActiveIndex}
+            activeIndex={deckActiveIndex}
+            onActiveChange={(i) => setActiveIndex(deckOrder[i] ?? 0)}
             visibleSide={2}
             className="-mx-4 sm:-mx-6 lg:-mx-8 w-auto"
             renderCard={(it, { isActive }) => (
