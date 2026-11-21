@@ -2,8 +2,8 @@ import re
 from typing import Required
 from sqlalchemy import Column , Integer , String , Float , Boolean , Text , DateTime , ForeignKey , UniqueConstraint
 from sqlalchemy.orm import relationship, foreign, remote
-from datetime import datetime 
-from server.database import Base 
+from server.database import Base
+from server.clock import utcnow
 
 class User(Base):
 
@@ -14,7 +14,7 @@ class User(Base):
     name = Column(String)
     avatar = Column(String , nullable = True)
     role = Column(String , default = "user")
-    created_at = Column(DateTime , default = datetime.utcnow)
+    created_at = Column(DateTime , default = utcnow)
     bio = Column(Text , nullable = True)
 
 
@@ -88,10 +88,11 @@ class Destination(Base):
 class Review(Base):
 
     __tablename__ = "reviews"
+    __table_args__ = (UniqueConstraint("user_id", "destination_id", name="uq_review_user_place"),)
 
-    id = Column(Integer , primary_key = True , index = True)
+    id = Column(Integer , primary_key = True , index =  True)
 
-    destination_id = Column(Integer , ForeignKey("destinations.id"))
+    destination_id = Column(Integer , ForeignKey("destinations.id") , index = True)
 
     user_id = Column(Integer , ForeignKey("users.id"))
 
@@ -99,17 +100,18 @@ class Review(Base):
 
     comment =  Column(Text)
 
-    created_at = Column(DateTime , default = datetime.utcnow)
+    created_at = Column(DateTime , default = utcnow)
 
 class Favorite(Base):
 
     __tablename__ = "favorites"
+    __table_args__ = (UniqueConstraint("user_id", "destination_id", name="uq_favorite_user_place"),)
 
     id = Column(Integer , primary_key = True , index = True)
 
     user_id = Column(Integer , ForeignKey("users.id"))
 
-    destination_id = Column(Integer , ForeignKey("destinations.id"))
+    destination_id = Column(Integer , ForeignKey("destinations.id") , index = True)
 
 
 
@@ -122,10 +124,10 @@ class TravelGroup(Base):
     destination_id = Column(Integer, ForeignKey("destinations.id"), nullable=True)
     custom_destination = Column(String, nullable=True)
     organizer_name = Column(String, nullable=False)
-    organizer_email = Column(String, nullable=False)
+    organizer_email = Column(String, nullable=False, index=True)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
-    trip_date = Column(DateTime, nullable=False)
+    trip_date = Column(DateTime, nullable=False, index=True)
     meeting_area = Column(String, nullable=False)
     estimated_cost = Column(Float, default=0.0)
     max_members = Column(Integer, default=5)
@@ -136,7 +138,7 @@ class TravelGroup(Base):
     
     status = Column(String, default="open")  # 'open', 'full', 'cancelled'
     safety_notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     itinerary_id = Column(Integer, ForeignKey("itineraries.id"), nullable=True)
     itinerary = relationship("Itinerary")
@@ -145,14 +147,16 @@ class TravelGroup(Base):
 class GroupRequest(Base):
 
     __tablename__ = "group_requests"
+    # One request per person per trip, enforced in the database so concurrent
+    # submissions can't create duplicates.
+    __table_args__ = (UniqueConstraint("group_id", "user_email", name="uq_group_request"),)
 
-    
     id = Column(Integer, primary_key=True, index=True)
-    group_id = Column(Integer, ForeignKey("travel_groups.id"), nullable=False)
+    group_id = Column(Integer, ForeignKey("travel_groups.id"), nullable=False, index=True)
     user_email = Column(String, nullable=False)
     user_name = Column(String, nullable=False)
     status = Column(String, default="pending")  # 'pending', 'approved', 'rejected'
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
 
 class GroupMember(Base):
@@ -165,7 +169,7 @@ class GroupMember(Base):
     group_id = Column(Integer, ForeignKey("travel_groups.id"), nullable=False, index=True)
     user_email = Column(String, nullable=False)
     user_name = Column(String, nullable=False)
-    joined_at = Column(DateTime, default=datetime.utcnow)
+    joined_at = Column(DateTime, default=utcnow)
 
 
 class Notification(Base):
@@ -179,7 +183,7 @@ class Notification(Base):
     message = Column(Text, nullable=False)
     link = Column(String, nullable=True)
     is_read = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
 
 
@@ -195,7 +199,7 @@ class Itinerary(Base):
     estimated_duration = Column(String, nullable=True)  # e.g., "4-5 Hours" or "1 Day"
     estimated_budget = Column(Float, nullable=True)     # Optional budget per person
     created_by_email = Column(String, nullable=False)   # Admin who created it
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     is_featured = Column(Boolean, default=False, nullable=False)  # One of the 3 free routes every user can open
 
     # Relationship to get all stops in proper order automatically!
@@ -211,7 +215,7 @@ class ItineraryStop(Base):
     __tablename__ = "itinerary_stops"
 
     id = Column(Integer, primary_key=True, index=True)
-    itinerary_id = Column(Integer, ForeignKey("itineraries.id", ondelete="CASCADE"), nullable=False)
+    itinerary_id = Column(Integer, ForeignKey("itineraries.id", ondelete="CASCADE"), nullable=False, index=True)
     destination_id = Column(Integer, ForeignKey("destinations.id"), nullable=False)
     order_index = Column(Integer, nullable=False, default=1)  # 1 for Stop A, 2 for Stop B, etc.
     transport_mode = Column(String, nullable=True)             # e.g., "Walking", "Cab / Auto", "Bus"

@@ -41,3 +41,28 @@ jobs:
       - name: Run ESLint (informational / non-blocking)
         run: npm run lint
         continue-on-error: true
+
+  backend-check:
+    name: Backend API Tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run API test suite
+        run: python -m pytest tests -q

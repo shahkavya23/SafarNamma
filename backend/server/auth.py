@@ -10,6 +10,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -51,9 +52,21 @@ TOKEN_PREFIX = "sn1."
 
 # Set SESSION_SECRET in the host's environment. Without it we derive a stable
 # secret from DATABASE_URL (which already holds the DB password), so tokens
-# survive restarts and are shared across workers.
-_secret_source = os.getenv("SESSION_SECRET") or ("safarnamma-session:" + os.getenv("DATABASE_URL", "local-dev"))
-_SECRET = hashlib.sha256(_secret_source.encode()).digest()
+# survive restarts and are shared across workers. If neither is set we fall back
+# to a RANDOM per-process secret: sessions then reset on restart, but nobody can
+# forge tokens from a guessable constant.
+_explicit_secret = os.getenv("SESSION_SECRET")
+_db_url = os.getenv("DATABASE_URL")
+if _explicit_secret:
+    _SECRET = hashlib.sha256(_explicit_secret.encode()).digest()
+elif _db_url:
+    _SECRET = hashlib.sha256(("safarnamma-session:" + _db_url).encode()).digest()
+else:
+    _SECRET = os.urandom(32)
+    logging.getLogger(__name__).warning(
+        "Neither SESSION_SECRET nor DATABASE_URL is set; using a random per-process "
+        "session secret. Sign-ins will not survive a restart. Set SESSION_SECRET in production."
+    )
 
 
 def is_admin_email(email: str) -> bool:

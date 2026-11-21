@@ -15,24 +15,26 @@ load_dotenv()
 
 logger = logging.getLogger("cloudinary_utils")
 
-# Load credentials with fallback to alternative env variable naming
+# Load credentials from the environment only. Hardcoded fallback credentials
+# would be exposed to anyone with repo access, so they are deliberately absent:
+# without a complete set, asset deletion is skipped (see warning below).
 CLOUD_NAME = (
     os.getenv("CLOUDINARY_CLOUD_NAME")
     or os.getenv("CLOUD_NAME")
     or os.getenv("VITE_CLOUD_NAME")
-    or "my3tjiae"
+    or ""
 ).strip()
 
 API_KEY = (
     os.getenv("CLOUDINARY_API_KEY")
     or os.getenv("CLOUD_API_KEY")
-    or "194939361476248"
+    or ""
 ).strip()
 
 API_SECRET = (
     os.getenv("CLOUDINARY_API_SECRET")
     or os.getenv("CLOUD_API_SECRET")
-    or "mCYmIiw8vDyCHiw1pniqBs1Jq6c"
+    or ""
 ).strip()
 
 if CLOUD_NAME and API_KEY and API_SECRET:

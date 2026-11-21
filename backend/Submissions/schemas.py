@@ -70,6 +70,16 @@ def _check_coordinates(lat : Optional[float] , lng : Optional[float]) -> None:
         raise ValueError("Latitude must be within 90 and longitude within 180 degrees")
 
 class DestinationCreate(DestinationBase):
+    @field_validator("category")
+    @classmethod
+    def category_must_be_known(cls, v: str) -> str:
+        # Validate writes only: legacy rows may predate the category consolidation,
+        # and responses must keep serializing them.
+        cleaned = v.strip()
+        if cleaned not in VALID_CATEGORIES:
+            raise ValueError(f"category must be one of: {', '.join(VALID_CATEGORIES)}")
+        return cleaned
+
     @model_validator(mode='after')
     def check_coordinates(self):
         _check_coordinates(self.latitude, self.longitude)

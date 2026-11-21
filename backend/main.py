@@ -6,7 +6,9 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, inspect, or_, text
+from sqlalchemy.exc import IntegrityError
 from server.database import engine, Base, get_db, SessionLocal
+from server.clock import utcnow
 from SQLite import models
 from Submissions import schemas 
 from server.cloudinary_utils import delete_destination_cloudinary_assets
@@ -15,6 +17,7 @@ from server.auth import (
     CurrentUser,
     create_session_token,
     get_current_user,
+    get_optional_user,
     is_admin_email,
     is_student_email,
     require_admin,
@@ -39,7 +42,9 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins = origins,
-    allow_origin_regex =r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$",
+    # Only this project's Vercel deployments (production + its preview URLs),
+    # not every *.vercel.app app on the internet.
+    allow_origin_regex =r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://safarnamma[a-z0-9-]*\.vercel\.app$",
     allow_credentials = True,
     allow_methods = ["*"],
     allow_headers = ["*"]
@@ -81,7 +86,7 @@ _backfill_group_members()
 
 @app.get('/')
 async def root():
-    return {"message" : "RoamLoacal API is running"}
+    return {"message" : "SafarNamma API is running"}
 
 @app.get('/api/health')
 @app.get('/health')
@@ -106,7 +111,7 @@ _presence_last_seen: dict[str, datetime] = {}
 
 
 def _live_count() -> int:
-    cutoff = datetime.utcnow() - PRESENCE_WINDOW
+    cutoff = utcnow() - PRESENCE_WINDOW
     for sid in [sid for sid, seen in _presence_last_seen.items() if seen < cutoff]:
         del _presence_last_seen[sid]
     return len(_presence_last_seen)
@@ -114,7 +119,7 @@ def _live_count() -> int:
 
 @app.post('/api/presence')
 async def presence_ping(payload: schemas.PresencePing):
-    _presence_last_seen[payload.session_id] = datetime.utcnow()
+    _presence_last_seen[payload.session_id] = utcnow()
     active = _live_count()
     return {"active": active, "display": active + PRESENCE_BASELINE}
 
@@ -139,6 +144,19 @@ def _get_or_create_user(db: Session, email: str) -> models.User:
 
 def _detach_destination(db: Session, dest: models.Destination) -> None:
     """Clears rows that reference a destination so Postgres lets us delete it."""
+    # Curated routes must not lose stops silently: make the admin remove the
+    # place from its itineraries first.
+    used_by = (
+        db.query(models.ItineraryStop)
+        .filter(models.ItineraryStop.destination_id == dest.id)
+        .all()
+    )
+    if used_by:
+        titles = sorted({s.itinerary.title for s in used_by if s.itinerary})
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"'{dest.name}' is a stop on {len(titles)} itinerary route(s) ({', '.join(titles)}). Remove it from those routes first."
+        )
     db.query(models.Review).filter(models.Review.destination_id == dest.id).delete(synchronize_session=False)
     db.query(models.Favorite).filter(models.Favorite.destination_id == dest.id).delete(synchronize_session=False)
     # Keep travel groups planned for this place; they just remember it by name
@@ -206,12 +224,18 @@ def get_popular_weekend_destinations(db: Session = Depends(get_db)):
     return featured
 
 @app.get("/api/destinations/{id}" , response_model = schemas.DestinationResponse)
-def get_destination(id : int , db : Session = Depends(get_db)):
+def get_destination(id : int , db : Session = Depends(get_db), user : Optional[CurrentUser] = Depends(get_optional_user)):
 
     dest = db.query(models.Destination).filter(models.Destination.id == id).first()
 
     if not dest:
         raise HTTPException(status_code = 404 , detail = "Destination not found")
+
+    # Unapproved submissions are private: only admins and the submitter may see them.
+    if not dest.is_approved:
+        is_submitter = bool(user and dest.submitted_by_email and user.email == dest.submitted_by_email.lower())
+        if not (user and (user.is_admin or is_submitter)):
+            raise HTTPException(status_code = 404 , detail = "Destination not found")
 
     return dest 
 
@@ -324,6 +348,18 @@ def create_review(review : schemas.ReviewCreate , db : Session = Depends(get_db)
         raise HTTPException(status_code =  404 , detail = "Destination not found")
 
     reviewer = _get_or_create_user(db, user.email)
+
+    # One review per person per place: repeat posts would let a single account
+    # skew the average rating.
+    existing = db.query(models.Review).filter(
+        models.Review.destination_id == review.destination_id,
+        models.Review.user_id == reviewer.id
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You've already reviewed this place. One review per person keeps ratings honest."
+        )
 
     new_review = models.Review(
         destination_id =  review.destination_id,
@@ -487,7 +523,7 @@ def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(
         )
 
     # Rate limit: An organizer can create a maximum of 2 groups per day
-    start_of_today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_today = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     groups_today = db.query(models.TravelGroup).filter(
         models.TravelGroup.organizer_email.ilike(group.organizer_email),
         models.TravelGroup.created_at >= start_of_today
@@ -534,7 +570,7 @@ TRIP_LISTED_AFTER_DEPARTURE = timedelta(hours=24)
 def get_travel_groups(db: Session = Depends(get_db)):
     # Auto-expiration: a trip stays listed for 24 hours after it departs (shown as "just wrapped",
     # so the crew can still find it and make their story), then disappears
-    cutoff = datetime.utcnow() - TRIP_LISTED_AFTER_DEPARTURE
+    cutoff = utcnow() - TRIP_LISTED_AFTER_DEPARTURE
     groups = db.query(models.TravelGroup).filter(
         models.TravelGroup.trip_date > cutoff
     ).order_by(models.TravelGroup.created_at.desc()).all()
@@ -592,7 +628,7 @@ def update_travel_group(
         )
 
     # 2. 12-Hour Cutoff: Trips cannot be modified within 12 hours of departure
-    now_utc = datetime.utcnow()
+    now_utc = utcnow()
     time_remaining = group.trip_date - now_utc
     if time_remaining < timedelta(hours=12):
         raise HTTPException(
@@ -679,7 +715,7 @@ def delete_travel_group(group_id: int, db: Session = Depends(get_db), user: Curr
         )
 
     # Cooldown verification: Can only be deleted after 2 hours of creation
-    time_elapsed = datetime.utcnow() - group.created_at
+    time_elapsed = utcnow() - group.created_at
     min_cooldown = timedelta(hours=2)
     if time_elapsed < min_cooldown:
         remaining_seconds = (min_cooldown - time_elapsed).total_seconds()
@@ -735,12 +771,12 @@ def get_travel_group(group_id: int, db: Session = Depends(get_db), user: Current
 def request_to_join(group_id: int, request_data: schemas.GroupRequestCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(require_student)):
     request_data.user_email = user.email
 
-    group = db.query(models.TravelGroup).filter(models.TravelGroup.id == group_id).first()
+    group = db.query(models.TravelGroup).filter(models.TravelGroup.id == group_id).with_for_update().first()
     
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
-    if group.trip_date <= datetime.utcnow():
+    if group.trip_date <= utcnow():
         raise HTTPException(status_code=400, detail="This trip has already happened.")
 
     if group.current_members >= group.max_members:
@@ -763,7 +799,12 @@ def request_to_join(group_id: int, request_data: schemas.GroupRequestCreate, db:
         status="pending"
     )
     db.add(new_req)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent request won the race; the unique constraint kept the roster clean.
+        db.rollback()
+        raise HTTPException(status_code=400, detail="You already have a request for this group.")
     db.refresh(new_req)
 
     # 1. Notify the organizer of new applicant
@@ -817,7 +858,11 @@ def update_request_status(request_id: int, new_status: str, db: Session = Depend
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    group = db.query(models.TravelGroup).filter(models.TravelGroup.id == req.group_id).first()
+    # Lock the group row so two concurrent approvals can't oversell the last seat.
+    group = db.query(models.TravelGroup).filter(models.TravelGroup.id == req.group_id).with_for_update().first()
+
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
 
     if group.organizer_email.lower() != organizer_email.lower():
         raise HTTPException(status_code=403, detail="Only the organizer can approve or reject requests.")
@@ -991,6 +1036,10 @@ def get_favorites(db: Session = Depends(get_db), current: CurrentUser = Depends(
 def add_favorite(payload: schemas.FavoriteCreate, db: Session = Depends(get_db), current: CurrentUser = Depends(get_current_user)):
     payload.user_email = current.email
     """Saves a destination into the user's favorites in SQLite."""
+    dest = db.query(models.Destination).filter(models.Destination.id == payload.destination_id).first()
+    if not dest:
+        raise HTTPException(status_code=404, detail="Destination not found")
+
     user = db.query(models.User).filter(models.User.email.ilike(payload.user_email)).first()
     if not user:
         user = models.User(
@@ -1445,6 +1494,11 @@ def delete_itinerary(
     if not itinerary:
         raise HTTPException(status_code=404, detail="Itinerary not found")
 
+    # Trips planned on this route keep running; they just lose the route reference
+    # (Postgres would reject the delete while travel_groups.itinerary_id points here).
+    db.query(models.TravelGroup).filter(models.TravelGroup.itinerary_id == itinerary_id).update(
+        {models.TravelGroup.itinerary_id: None}, synchronize_session=False
+    )
     db.delete(itinerary)
     db.commit()
     return {"message": "Itinerary deleted successfully"}

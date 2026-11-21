@@ -1,0 +1,4 @@
+# Test/dev tooling for the backend API suite (run: python -m pytest tests)
+-r requirements.txt
+pytest>=8.0
+httpx>=0.27
