@@ -1143,7 +1143,7 @@ export const GroupsPage = () => {
                                 onBlur={() => {
                                   if (sizePicked && formData.max_members < SIZE_MIN) setFormData({ ...formData, max_members: SIZE_MIN });
                                 }}
-                                className="w-20 text-center bg-transparent font-bold text-lg text-ink tabular-nums placeholder:text-muted focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                className="w-20 text-center bg-transparent font-bold text-lg text-ink tabular-nums placeholder:text-muted [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                               />
                               <button
                                 type="button"
