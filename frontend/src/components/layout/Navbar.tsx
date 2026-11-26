@@ -305,7 +305,7 @@ export const Navbar = () => {
                     onClick={(e) => handleDeleteNotification(e, notif.id)}
                     title="Dismiss notification"
                     aria-label="Dismiss notification"
-                    className={cn('p-1 text-muted hover:text-[#B42318] transition-all rounded', !compact && 'opacity-0 group-hover:opacity-100')}
+                    className={cn('p-1 text-muted hover:text-[#B42318] transition-all rounded', !compact && 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100')}
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>

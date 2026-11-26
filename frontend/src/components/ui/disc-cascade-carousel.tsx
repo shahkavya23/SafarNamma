@@ -340,7 +340,7 @@ const CSS =
   "@keyframes dcc-drop{from{opacity:0;transform:translate(-50%,-6px)}}" +
   ".dcc-opt{display:flex;align-items:baseline;gap:10px;width:100%;margin:0;padding:7px 10px;border:0;border-radius:6px;" +
   "background:none;color:inherit;font:inherit;font-size:12px;text-align:left;cursor:pointer}" +
-  ".dcc-opt:hover,.dcc-opt:focus-visible{outline:none;background:color-mix(in oklab,currentColor 8%,transparent)}" +
+  ".dcc-opt:hover{background:color-mix(in oklab,currentColor 8%,transparent)}" + ".dcc-opt:focus-visible{outline:2px solid currentColor;outline-offset:2px;background:color-mix(in oklab,currentColor 8%,transparent)}" +
   ".dcc-opt[aria-current] .dcc-optt{font-weight:600}" +
   ".dcc-optn{font-size:10px;opacity:.45;font-variant-numeric:tabular-nums}" +
   ".dcc-opty{margin-left:auto;font-size:10px;opacity:.45}" +
