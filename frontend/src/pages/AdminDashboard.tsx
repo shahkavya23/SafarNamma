@@ -733,6 +733,8 @@ export const AdminDashboard = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative max-h-[92vh] overflow-y-auto" data-lenis-prevent>
             <button
+              type="button"
+              aria-label="Close approval details"
               onClick={() => setSelectedForApproval(null)}
               className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
             >

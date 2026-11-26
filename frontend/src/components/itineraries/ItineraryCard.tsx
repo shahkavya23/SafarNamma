@@ -230,6 +230,7 @@ export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdm
                   : 'bg-sand border-line text-muted hover:text-ink'
               }`}
               title={itinerary.is_featured ? 'Free for everyone. Click to lock it again' : 'Make this one of the 3 free routes'}
+              aria-label={itinerary.is_featured ? 'Remove from featured routes' : 'Feature this itinerary'}
               aria-pressed={itinerary.is_featured}
             >
               <Star className={`w-4 h-4 ${itinerary.is_featured ? 'fill-diya text-diya' : ''}`} />
@@ -240,6 +241,7 @@ export const ItineraryCard = ({ itinerary, fallbackImage, isActive = true, isAdm
               onClick={(e) => onDelete(e, itinerary.id)}
               className="shrink-0 w-11 h-11 rounded-full bg-sand border border-line text-muted hover:bg-[#FDF3F1] hover:text-[#B42318] flex items-center justify-center transition-colors"
               title="Delete itinerary"
+              aria-label="Delete itinerary"
             >
               <Trash2 className="w-4 h-4" />
             </button>

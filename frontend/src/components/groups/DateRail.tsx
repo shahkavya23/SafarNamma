@@ -169,7 +169,7 @@ export const DateRail: React.FC<DateRailProps> = ({ trips, value, onChange }) =>
               aria-label={`Weekend ${daysLabel(pair)}, ${pairTrips} ${pairTrips === 1 ? 'trip' : 'trips'}`}
               onClick={() => onChange(weekendPick ? [] : pair)}
               className={cn(
-                'group/wk mx-2 mt-1 pt-1 border-t-2 text-[9px] font-mono uppercase tracking-[0.2em] transition-colors outline-none focus-visible:text-ink',
+                'group/wk mx-2 mt-1 pt-1 border-t-2 text-[9px] font-mono uppercase tracking-[0.2em] transition-colors outline-none focus-visible:text-ink focus-visible:ring-2 focus-visible:ring-accent/60',
                 weekendPick ? 'border-ink text-ink' : 'border-line-strong text-muted hover:border-ink hover:text-ink'
               )}
             >
